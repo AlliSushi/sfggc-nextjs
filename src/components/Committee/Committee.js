@@ -6,6 +6,7 @@ import glenn from '../../images/committee/glenn.jpg';
 import allison from '../../images/committee/allison.jpg';
 import duane from '../../images/committee/duane.jpg';
 import robert from '../../images/committee/robert.jpg';
+import cathy from '../../images/committee/cathy.jpg';
 
 const Committee = () => {
   return (
@@ -23,8 +24,8 @@ const Committee = () => {
       <div className={`row justify-content-center`}>
         <div className={`col-6 col-sm-4 col-lg-3`}>
           <div className={`card ${styles.Card}`}>
-            <Image src={glenn}
-                   alt={'Glenn Normandin'}
+            <Image src={allison}
+                   alt={'Allison D Laureano'}
                    className={`img-fluid card-img-top ${styles.Image}`}
             />
             <div className={`card-body`}>
@@ -32,11 +33,11 @@ const Committee = () => {
                 <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}
                    className={`card-link`}
                 >
-                  Glenn Normandin
+                  Allison D Laureano
                 </a>
               </p>
               <p className={styles.Role}>
-                Co-Director
+                Committee Co-Chair
               </p>
             </div>
           </div>
@@ -45,41 +46,41 @@ const Committee = () => {
 
         <div className={`col-6 col-sm-4 col-lg-3`}>
           <div className={`card ${styles.Card}`}>
-            <Image src={robert}
-                   alt={'Robert Hendricks'}
+            <Image src={cathy}
+                   alt={'Cathy Patterson'}
                    className={`img-fluid card-img-top ${styles.Image}`}
             />
             <div className={`card-body`}>
               <p className={`${styles.Name}`}>
                 <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>
-                  Robert Hendricks
+                  Cathy Patterson
                 </a>
               </p>
               <p className={styles.Role}>
-                Co-Director
+                Committee Co-Chair
               </p>
             </div>
           </div>
         </div>
 
-        <div className={`col-6 col-sm-4 col-lg-3`}>
-          <div className={`card ${styles.Card}`}>
-            <Image src={allison}
-                   alt={'A cartoon image of Allison'}
-                   className={`img-fluid card-img-top ${styles.Image}`}
-            />
-            <div className={`card-body`}>
-              <p className={`${styles.Name}`}>
-                {/*<a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>*/}
-                  Allison Laureano
-                {/*</a>*/}
-              </p>
-              <p className={styles.Role}>
-                Operations &amp; Technologist
-              </p>
-            </div>
-          </div>
-        </div>
+        //<div className={`col-6 col-sm-4 col-lg-3`}>
+          //<div className={`card ${styles.Card}`}>
+            //<Image src={allison}
+                   //alt={'A cartoon image of Allison'}
+                   //className={`img-fluid card-img-top ${styles.Image}`}
+            ///>
+            //<div className={`card-body`}>
+              //<p className={`${styles.Name}`}>
+                //{/*<a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>*/}
+                  //Allison Laureano
+                //{/*</a>*/}
+              //</p>
+              //<p className={styles.Role}>
+                //Operations &amp; Technologist
+              //</p>
+            //</div>
+          //</div>
+        //</div>
 
         <div className={`col-6 col-sm-4 col-lg-3`}>
           <div className={`card ${styles.Card}`}>
@@ -94,7 +95,7 @@ const Committee = () => {
                 </a>
               </p>
               <p className={styles.Role}>
-                Scratch Master
+                Scratch Master / Treasurer
               </p>
             </div>
           </div>
@@ -112,9 +113,9 @@ const Committee = () => {
               {/*<li className="list-group-item">*/}
               {/*  Robert Hughes*/}
               {/*</li>*/}
-              <li className="list-group-item">
-                Cathy Patterson
-              </li>
+              {/*<li className="list-group-item">*/}
+              {/*  Cathy Patterson*/}
+              {/*</li>*/}
               {/*<li className="list-group-item">*/}
               {/*  R.H. Ryan*/}
               {/*</li>*/}
