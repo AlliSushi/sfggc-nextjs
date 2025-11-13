@@ -21,28 +21,28 @@ const Committee = () => {
         </p>
       </div>
 
-      <div className={`row justify-content-center`}>
-        <div className={`col-6 col-sm-4 col-lg-3`}>
-          <div className={`card ${styles.Card}`}>
-            <Image src={glenn}
-                   alt={'Glenn Normandin'}
-                   className={`img-fluid card-img-top ${styles.Image}`}
-            />
-            <div className={`card-body`}>
-              <p className={`${styles.Name}`}>
-                <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}
-                   className={`card-link`}
-                >
-                  Glenn Normandin
-                </a>
-              </p>
-              <p className={styles.Role}>
-                Co-Director
-              </p>
-            </div>
-          </div>
+      // <div className={`row justify-content-center`}>
+      //   <div className={`col-6 col-sm-4 col-lg-3`}>
+      //     <div className={`card ${styles.Card}`}>
+      //       <Image src={glenn}
+      //              alt={'Glenn Normandin'}
+      //              className={`img-fluid card-img-top ${styles.Image}`}
+      //       />
+      //       <div className={`card-body`}>
+      //         <p className={`${styles.Name}`}>
+      //           <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}
+      //              className={`card-link`}
+      //           >
+      //             Glenn Normandin
+      //           </a>
+      //         </p>
+      //         <p className={styles.Role}>
+      //           Co-Director
+      //         </p>
+      //       </div>
+      //     </div>
 
-        </div>
+      //   </div>
 
         <div className={`col-6 col-sm-4 col-lg-3`}>
           <div className={`card ${styles.Card}`}>
@@ -71,12 +71,12 @@ const Committee = () => {
             />
             <div className={`card-body`}>
               <p className={`${styles.Name}`}>
-                {/*<a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>*/}
+                <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>
                   Allison Laureano
-                {/*</a>*/}
+                </a>
               </p>
               <p className={styles.Role}>
-                Operations &amp; Technologist
+                Co-Director
               </p>
             </div>
           </div>
