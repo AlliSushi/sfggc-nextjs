@@ -6,6 +6,7 @@ import glenn from '../../images/committee/glenn.jpg';
 import allison from '../../images/committee/allison.jpg';
 import duane from '../../images/committee/duane.jpg';
 import robert from '../../images/committee/robert.jpg';
+import cathy from '../../images/committee/cathy.jpg';
 
 const Committee = () => {
   return (
@@ -45,14 +46,14 @@ const Committee = () => {
 
         <div className={`col-6 col-sm-4 col-lg-3`}>
           <div className={`card ${styles.Card}`}>
-            <Image src={robert}
-                   alt={'Robert Hendricks'}
+            <Image src={cathy}
+                   alt={'Cathy Patterson'}
                    className={`img-fluid card-img-top ${styles.Image}`}
             />
             <div className={`card-body`}>
               <p className={`${styles.Name}`}>
                 <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>
-                  Robert Hendricks
+                  Cathy Patterson
                 </a>
               </p>
               <p className={styles.Role}>
@@ -112,9 +113,9 @@ const Committee = () => {
               {/*<li className="list-group-item">*/}
               {/*  Robert Hughes*/}
               {/*</li>*/}
-              <li className="list-group-item">
-                Cathy Patterson
-              </li>
+              {/*<li className="list-group-item">*/}
+              {/*  Cathy Patterson*/}
+              {/*</li>*/}
               {/*<li className="list-group-item">*/}
               {/*  R.H. Ryan*/}
               {/*</li>*/}
