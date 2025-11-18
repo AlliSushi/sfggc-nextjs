@@ -111,6 +111,24 @@ Before deploying, you need:
 
 Make sure you have the latest code and dependencies:
 
+**Option 1: Use the build script (Recommended)**
+
+The build script automatically checks dependencies and builds the site:
+
+```bash
+./deploy_scripts/build.sh
+```
+
+The script will:
+- Check for Node.js and npm
+- Install dependencies if needed (`npm install`)
+- Validate `next.config.js` configuration
+- Build the static site (`npm run build`)
+- Validate the build output
+- Display build statistics
+
+**Option 2: Manual build**
+
 ```bash
 # Install dependencies (if not already done)
 npm install
@@ -118,6 +136,20 @@ npm install
 # Build the static site
 npm run build
 ```
+
+**Verify the build:**
+
+After building, check that the `out` directory was created:
+
+```bash
+ls -la out/
+```
+
+You should see:
+- `index.html` - Homepage
+- `404.html` - 404 error page
+- `_next/` - Next.js static assets
+- Other HTML pages (committee.html, results.html, etc.)
 
 ### 3. Deploy Using the Deployment Script
 
@@ -222,6 +254,20 @@ If you're using Nginx instead of Apache, you'll need to configure nginx to serve
 
 #### Common Issues:
 
+**Build failures:**
+- Ensure Node.js is installed: `node --version`
+- Ensure npm is installed: `npm --version`
+- Try cleaning and rebuilding: `rm -rf out node_modules && npm install && ./deploy_scripts/build.sh`
+- Check for syntax errors in your code
+- Verify `next.config.js` has `output: 'export'` configured
+- Check build logs for specific error messages
+
+**Build output missing files:**
+- Verify the build completed successfully (check for errors)
+- Ensure all pages are properly exported
+- Check that images are in the `public/` directory
+- Verify `next.config.js` configuration
+
 **SSH Authentication Issues:**
 - If prompted for password, SSH keys may not be set up correctly
 - Run `./deploy_scripts/setup-ssh.sh` to set up SSH keys
@@ -258,7 +304,9 @@ If you're using Nginx instead of Apache, you'll need to configure nginx to serve
 To update your website:
 
 1. **Make changes locally**
-2. **Build the site**: `npm run build`
+2. **Build the site**: 
+   - Use the build script: `./deploy_scripts/build.sh`
+   - Or manually: `npm run build`
 3. **Deploy again**: Run the deployment script or manual process
 4. **Test the changes**
 

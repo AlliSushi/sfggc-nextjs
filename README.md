@@ -31,8 +31,9 @@ Deployment scripts are located in the `deploy_scripts/` directory. **Important: 
 
 2. Build the static site:
    ```bash
-   npm run build
+   ./deploy_scripts/build.sh
    ```
+   Or manually: `npm run build`
 
 3. Deploy using the automated script (from the project root):
    ```bash
