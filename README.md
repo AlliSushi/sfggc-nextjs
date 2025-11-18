@@ -23,17 +23,27 @@ Deployment scripts are located in the `deploy_scripts/` directory. **Important: 
 
 ### Quick Start
 
-1. Build the static site:
+1. **Set up SSH keys** (recommended for passwordless deployment):
+   ```bash
+   ./deploy_scripts/setup-ssh.sh <ssh_user@server> <server_alias>
+   ```
+   Example: `./deploy_scripts/setup-ssh.sh jfuggc@54.70.1.215 sfggc-server`
+
+2. Build the static site:
    ```bash
    npm run build
    ```
 
-2. Deploy using the automated script (from the project root):
+3. Deploy using the automated script (from the project root):
    ```bash
    ./deploy_scripts/deploy.sh <ssh_user@server> <domain_path> <domain_name>
    ```
+   Or use the server alias if you set up SSH keys:
+   ```bash
+   ./deploy_scripts/deploy.sh <server_alias> <domain_path> <domain_name>
+   ```
 
-3. Or use the manual deployment script for step-by-step deployment:
+4. Or use the manual deployment script for step-by-step deployment:
    ```bash
    ./deploy_scripts/deploy-manual.sh <ssh_user@server> <domain_path> <domain_name>
    ```

@@ -8,6 +8,95 @@ This guide will help you deploy your SFGGC Next.js static website to a CloudPane
 - Domain name configured in CloudPanel
 - Basic knowledge of command line
 
+## SSH Key Setup (Recommended)
+
+For passwordless deployment, set up SSH key authentication. This allows the deployment script to run without prompting for a password each time.
+
+### Option 1: Automated Setup (Recommended)
+
+Use the provided SSH setup script:
+
+```bash
+./deploy_scripts/setup-ssh.sh <ssh_user@server> <server_alias>
+```
+
+**Example:**
+```bash
+./deploy_scripts/setup-ssh.sh jfuggc@54.70.1.215 sfggc-server
+```
+
+The script will:
+1. Generate an SSH key pair (if one doesn't exist)
+2. Configure your SSH config file with a friendly alias
+3. Help you add the public key to the server
+4. Test the passwordless connection
+
+**After running the script**, you'll need to add the public key to your server. The script will display your public key and provide instructions.
+
+### Option 2: Manual SSH Key Setup
+
+If you prefer to set up SSH keys manually:
+
+#### Step 1: Generate SSH Key
+
+```bash
+# Generate a new SSH key
+ssh-keygen -t ed25519 -C "sfggc-deployment" -f ~/.ssh/id_ed25519_sfggc -N ""
+```
+
+#### Step 2: Add to SSH Config
+
+Create or edit `~/.ssh/config`:
+
+```bash
+Host sfggc-server
+    HostName 54.70.1.215
+    User jfuggc
+    IdentityFile ~/.ssh/id_ed25519_sfggc
+    IdentitiesOnly yes
+```
+
+Set proper permissions:
+```bash
+chmod 600 ~/.ssh/config
+```
+
+#### Step 3: Add Public Key to Server
+
+Display your public key:
+```bash
+cat ~/.ssh/id_ed25519_sfggc.pub
+```
+
+Add it to the server (you'll be prompted for your password once):
+```bash
+ssh jfuggc@54.70.1.215 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo "YOUR_PUBLIC_KEY_HERE" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+```
+
+Replace `YOUR_PUBLIC_KEY_HERE` with the output from `cat ~/.ssh/id_ed25519_sfggc.pub`.
+
+#### Step 4: Test Connection
+
+Test passwordless SSH:
+```bash
+ssh sfggc-server "echo 'Connection successful'"
+```
+
+If successful, you won't be prompted for a password.
+
+### Using SSH Keys with Deployment
+
+Once SSH keys are set up, you can use the server alias in the deployment script:
+
+```bash
+./deploy_scripts/deploy.sh sfggc-server /home/jfuggc/htdocs/www.goldengateclassic.org www.goldengateclassic.org
+```
+
+Or use the full SSH connection string:
+```bash
+./deploy_scripts/deploy.sh jfuggc@54.70.1.215 /home/jfuggc/htdocs/www.goldengateclassic.org www.goldengateclassic.org
+```
+
 ## Step-by-Step Deployment
 
 ### 1. Gather Required Information
@@ -133,8 +222,14 @@ If you're using Nginx instead of Apache, you'll need to configure nginx to serve
 
 #### Common Issues:
 
+**SSH Authentication Issues:**
+- If prompted for password, SSH keys may not be set up correctly
+- Run `./deploy_scripts/setup-ssh.sh` to set up SSH keys
+- Test connection: `ssh <server_alias> "echo Connection successful"`
+- Verify key is in server's `~/.ssh/authorized_keys` file
+
 **Files not uploading:**
-- Check SSH connection: `ssh user@your-server.com`
+- Check SSH connection: `ssh user@your-server.com` or `ssh <server_alias>`
 - Verify domain path exists
 - Ensure you have write permissions
 
