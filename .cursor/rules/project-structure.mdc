@@ -1,0 +1,42 @@
+---
+alwaysApply: true
+---
+
+# SFGGC Project Structure Guide
+
+This is a Next.js static website for the San Francisco Golden Gate Classic bowling tournament. The project follows a specific structure and conventions.
+
+## Key Architecture
+
+- **Framework**: Next.js 14 with React 18
+- **Styling**: Bootstrap 5 + SCSS modules
+- **Theme**: Custom Bootstrap color modes with dark/light/auto support
+- **Analytics**: Vercel Analytics
+- **Build**: Static site generation
+
+## Directory Structure
+
+- [src/pages/](mdc:src/pages/) - Next.js pages (routing)
+- [src/components/](mdc:src/components/) - React components organized by feature
+- [src/scss/](mdc:src/scss/) - Global SCSS styles and Bootstrap customization
+- [src/utils/](mdc:src/utils/) - Utility functions and context providers
+- [src/images/](mdc:src/images/) - Optimized images organized by category
+- [public/](mdc:public/) - Static assets and results PDFs
+
+## Component Organization
+
+Each component lives in its own directory with:
+- `ComponentName.js` - React component
+- `ComponentName.module.scss` - Component-specific styles
+
+## Key Files
+
+- [src/pages/_app.js](mdc:src/pages/_app.js) - App wrapper with Bootstrap and Analytics
+- [src/components/layout/layout.js](mdc:src/components/layout/layout.js) - Root layout with theme provider
+- [src/utils/ThemeContext.js](mdc:src/utils/ThemeContext.js) - Theme management context
+- [src/scss/sfggc.scss](mdc:src/scss/sfggc.scss) - Main stylesheet
+- [package.json](mdc:package.json) - Dependencies and scripts
+
+## Mobile-First Design
+
+The project uses mobile-first responsive design with Bootstrap breakpoints. Always consider mobile viewports first, then adapt for larger screens.

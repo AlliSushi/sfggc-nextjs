@@ -17,6 +17,35 @@ I have also used this project to further my understanding of Bootstrap's impleme
 3. Run `npm install`
 4. To run a development server, run `npm run dev` and have at it!
 
+## Deployment
+
+Deployment scripts are located in the `deploy_scripts/` directory. **Important: These scripts must be run from the project root directory** because they use relative paths to locate the `out` directory created by the build process.
+
+### Quick Start
+
+1. Build the static site:
+   ```bash
+   npm run build
+   ```
+
+2. Deploy using the automated script (from the project root):
+   ```bash
+   ./deploy_scripts/deploy.sh <ssh_user@server> <domain_path> <domain_name>
+   ```
+
+3. Or use the manual deployment script for step-by-step deployment:
+   ```bash
+   ./deploy_scripts/deploy-manual.sh <ssh_user@server> <domain_path> <domain_name>
+   ```
+
+For detailed deployment instructions, see the [deployment guide](deploy_docs/DEPLOYMENT.md).
+
+If you encounter server permission issues or other deployment problems, see [SERVER_SETUP.md](SERVER_SETUP.md) for troubleshooting steps and server configuration guidance.
+
+**Web Server Configuration:**
+- Using **Apache**: The deployment script automatically configures `.htaccess` for you
+- Using **Nginx**: See the nginx configuration guides in [`deploy_docs/`](deploy_docs/) for setup instructions
+
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 

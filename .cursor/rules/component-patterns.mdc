@@ -1,0 +1,75 @@
+---
+globs: *.js,*.jsx
+---
+
+# Component Patterns and Conventions
+
+## Component Structure
+
+All components follow this pattern:
+
+```javascript
+import styles from './ComponentName.module.scss';
+// Other imports...
+
+const ComponentName = () => {
+  return (
+    <section className={`${styles.ComponentName}`}>
+      {/* Component content */}
+    </section>
+  )
+}
+
+export default ComponentName;
+```
+
+## Naming Conventions
+
+- **Components**: PascalCase (e.g., `Hero`, `RegisterCTA`)
+- **Files**: Match component name (e.g., `Hero.js`, `Hero.module.scss`)
+- **CSS Classes**: PascalCase in SCSS modules (e.g., `.Hero`, `.Content`)
+- **Directories**: Match component name (e.g., `Hero/`, `RegisterCTA/`)
+
+## Layout Pattern
+
+Pages use a custom layout pattern:
+
+```javascript
+// In page component
+const PageComponent = () => {
+  return (
+    <div>
+      {/* Page content */}
+    </div>
+  )
+}
+
+PageComponent.getLayout = function getLayout(page) {
+  return (
+    <RootLayout>
+      {page}
+    </RootLayout>
+  );
+}
+
+export default PageComponent;
+```
+
+## Component Organization
+
+- Each component in its own directory
+- SCSS modules for component-specific styles
+- Import global styles in `_app.js`
+- Use Bootstrap classes combined with custom SCSS modules
+
+## Section Structure
+
+Most components are sections with:
+- Section wrapper with component-specific class
+- Section heading with `.section-heading` class
+- Background images and shades for visual effects
+- Responsive margins and padding
+
+## Example Component Structure
+
+See [src/components/Hero/Hero.js](mdc:src/components/Hero/Hero.js) for a complete example of the component pattern used throughout the project.
