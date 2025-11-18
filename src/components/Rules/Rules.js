@@ -38,9 +38,9 @@ const Rules = () => {
       markdown: `
 * Handicap: 90% of the difference between average and 220.
 * The Highest of:
-  * Composite League Average 2023-2024 (with at least 21 games bowled)
-  * IGBO Tournament Average (TAD) from 1/1/24 to 12/31/24 (minimum 9 games)
-  * Composite League Average 2024-2025 as of 12/31/2024 (with at least 21 games bowled)
+  * Composite League Average 2024-2025 (with at least 21 games bowled)
+  * IGBO Tournament Average (TAD) from 1/1/25 to 12/31/25 (minimum 9 games)
+  * Composite League Average 2025-2026 as of 12/31/2025 (with at least 21 games bowled)
   * If none of the above applies, contact us as soon as possible (directors@goldengateclassic.org).
 * Averages must be verified via credible websites or documents.
 * Submitting an incorrect average will result in disqualification.
@@ -57,7 +57,7 @@ const Rules = () => {
     {
       header: 'Entry Requirements',
       markdown: `
-* Fees: **$119** on or before Jan 17, 2025, **$129** after Jan 17, 2025.
+* Fees: **$119** on or before Jan 16, 2026, **$129** after Jan 16, 2026.
 * Registration will not be considered complete until Entry Fees and Memberships are PAID IN FULL. 
 * Deadline: January 31, 2025. No refunds except at director’s discretion.
 `,
@@ -122,8 +122,8 @@ If fewer than 6 bowlers sign up in a division, they may move to a higher divisio
         </p>
 
         <p>
-          The 2025 San Francisco Golden Gate Classic shall be held from Friday, February 14, through Sunday, February
-          16, 2025, at Classic Bowling Center, located at 900 King Dr., Daly City, CA 94015.
+          The 2026 San Francisco Golden Gate Classic shall be held from Friday, February 13, through Sunday, February
+          15, 2026, at Classic Bowling Center, located at 900 King Dr., Daly City, CA 94015.
         </p>
 
         <ol>
