@@ -43,6 +43,25 @@ const Committee = () => {
           </div>
         </div> */}
 
+      <div className={`col-6 col-sm-4 col-lg-3`}>
+          <div className={`card ${styles.Card}`}>
+            <Image src={allison}
+                   alt={'A cartoon image of Allison'}
+                   className={`img-fluid card-img-top ${styles.Image}`}
+            />
+            <div className={`card-body`}>
+              <p className={`${styles.Name}`}>
+                <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>
+                  Allison Laureano
+                </a>
+              </p>
+              <p className={styles.Role}>
+                Co-Director
+              </p>
+            </div>
+          </div>
+        </div>  
+          
         <div className={`col-6 col-sm-4 col-lg-3`}>
           <div className={`card ${styles.Card}`}>
             <Image src={cathy}
@@ -53,25 +72,6 @@ const Committee = () => {
               <p className={`${styles.Name}`}>
                 <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>
                   Cathy Patterson
-                </a>
-              </p>
-              <p className={styles.Role}>
-                Co-Director
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className={`col-6 col-sm-4 col-lg-3`}>
-          <div className={`card ${styles.Card}`}>
-            <Image src={allison}
-                   alt={'A cartoon image of Allison'}
-                   className={`img-fluid card-img-top ${styles.Image}`}
-            />
-            <div className={`card-body`}>
-              <p className={`${styles.Name}`}>
-                <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>
-                  Allison Laureano
                 </a>
               </p>
               <p className={styles.Role}>
