@@ -5,8 +5,9 @@ import styles from './Committee.module.scss';
 import glenn from '../../images/committee/glenn.jpg';
 import allison from '../../images/committee/allison.jpg';
 import duane from '../../images/committee/duane.jpg';
-import robert from '../../images/committee/robert.jpg';
+// import robert from '../../images/committee/robert.jpg';
 import cathy from '../../images/committee/cathy.jpg';
+import jfunson from '../../images/committee/jfunson.jpg';
 
 const Committee = () => {
   return (
@@ -22,27 +23,6 @@ const Committee = () => {
       </div>
 
       <div className={`row justify-content-center`}>
-        {/* <div className={`col-6 col-sm-4 col-lg-3`}>
-          <div className={`card ${styles.Card}`}>
-            <Image src={glenn}
-                   alt={'Glenn Normandin'}
-                   className={`img-fluid card-img-top ${styles.Image}`}
-            />
-            <div className={`card-body`}>
-              <p className={`${styles.Name}`}>
-                <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}
-                   className={`card-link`}
-                >
-                  Glenn Normandin
-                </a>
-              </p>
-              <p className={styles.Role}>
-                Co-Director
-              </p>
-            </div>
-          </div>
-        </div> */}
-
       <div className={`col-6 col-sm-4 col-lg-3`}>
           <div className={`card ${styles.Card}`}>
             <Image src={allison}
@@ -100,6 +80,27 @@ const Committee = () => {
           </div>
         </div>
 
+        <div className={`col-6 col-sm-4 col-lg-3`}>
+          <div className={`card ${styles.Card}`}>
+            <Image src={jfunson}
+                   alt={'JF Unson'}
+                   className={`img-fluid card-img-top ${styles.Image}`}
+            />
+            <div className={`card-body`}>
+              <p className={`${styles.Name}`}>
+                <a href={'mailto:jfu@jfunson.com?subject=About%20the%20Golden%20Gate%20Classic'}
+                   className={`card-link`}
+                >
+                  JF Unson
+                </a>
+              </p>
+              <p className={styles.Role}>
+                Chief Technologist
+              </p>
+            </div>
+          </div>
+        </div>
+           
         <div className={`col-6 col-sm-4 col-lg-3`}>
           <div className={`card ${styles.Card}`}>
             <div className={'card-header'}>
