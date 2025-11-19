@@ -189,7 +189,7 @@ If fewer than 6 bowlers sign up in a division, they may move to a higher divisio
           //            alt={'Logo for Does Your Mother Know'}/>
           //   </a>
           // </div>
-        </div>
+        // </div>
 
         <ReactMarkdown>{scratchMarkdown}</ReactMarkdown>
 
