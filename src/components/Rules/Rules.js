@@ -82,10 +82,11 @@ const Rules = () => {
 1. **Overview:** 
 The Scratch Masters is an optional, mixed competition with a separate entry fee, open to all SFGGC participants.
 1. **Divisions & Fees:**
-    *  Division A: 208+ ($60)
-    *  Division B: 190-207 ($55)
+    *  Division A: 208+ ($55)
+    *  Division B: 190-207 ($50)
     *  Division C: 170-189 ($45)
-    *  Division D: 0-169 ($40)
+    *  Division D: 150-169 ($40)
+    *  Division E: 0-149 ($35)
     *  Tournament Director(s) may adjust a bowler’s division before they bowl.
 1. **Qualification:** 
 Scratch scores from Doubles, Singles, and Team events determine the top 6 qualifiers and one alternate per division (no handicap). A tie for 6th is settled with a 9th-and-10th-frame roll-off.
