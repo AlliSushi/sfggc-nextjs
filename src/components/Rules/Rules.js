@@ -149,7 +149,7 @@ If fewer than 6 bowlers sign up in a division, they may move to a higher divisio
           (Also pending finalization)
         </p>
 
-        <div className={`${styles.Sponsor} row`}>
+{/*<div className={`${styles.Sponsor} row`}>
           <div className={'col-8 col-sm-6 text-end'}>
             <span className={styles.Intro}>
               Scratch Masters sponsored by
@@ -181,15 +181,7 @@ If fewer than 6 bowlers sign up in a division, they may move to a higher divisio
               </span>
             </address>
           </div>
-          <div className={'col-4 col-sm-3'}>
-            <a href={'https://dymkmedia.wixsite.com/does-your-mother-k-1'}
-               target={'_blank'}>
-              <Image src={dymk}
-                     className={'img-fluid'}
-                     alt={'Logo for Does Your Mother Know'}/>
-            </a>
-          </div>
-        </div>
+        </div>*/}
 
         <ReactMarkdown>{scratchMarkdown}</ReactMarkdown>
 
