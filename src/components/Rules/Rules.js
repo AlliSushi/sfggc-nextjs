@@ -149,7 +149,7 @@ If fewer than 6 bowlers sign up in a division, they may move to a higher divisio
           (Also pending finalization)
         </p>
 
-        /*<div className={`${styles.Sponsor} row`}>
+{/*<div className={`${styles.Sponsor} row`}>
           <div className={'col-8 col-sm-6 text-end'}>
             <span className={styles.Intro}>
               Scratch Masters sponsored by
@@ -181,7 +181,7 @@ If fewer than 6 bowlers sign up in a division, they may move to a higher divisio
               </span>
             </address>
           </div>
-        </div>*/
+        </div>*/}
 
         <ReactMarkdown>{scratchMarkdown}</ReactMarkdown>
 
