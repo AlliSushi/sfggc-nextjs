@@ -154,32 +154,32 @@ If fewer than 6 bowlers sign up in a division, they may move to a higher divisio
             // <span className={styles.Intro}>
             //   Scratch Masters sponsored by
             // </span>
-            // <span className={styles.Name}>
-            //   Does Your Mother Know
-            // </span>
-            // <address>
-            //   <span className={styles.Line}>
-            //     4141 18th St.
-            //   </span>
-            //   <span className={styles.Line}>
-            //     San Francisco, CA 94114
-            //   </span>
-            //   <span className={styles.Line}>
-            //     <a href={'tel:4158643160'}>
-            //       <i className={'bi bi-telephone-fill pe-2'} aria-hidden={true}/>
-            //       415-864-3160
-            //     </a>
-            //   </span>
-            //   <span className={styles.Line}>
-            //     <a href={'https://dymkmedia.wixsite.com/does-your-mother-k-1'}
-            //        target={'_blank'}>
-            //       <i className={'bi bi-globe2'} aria-hidden={true}/>
-            //       <span className={'visually-hidden'}>
-            //         website
-            //       </span>
-            //     </a>
-            //   </span>
-            // </address>
+            <span className={styles.Name}>
+              Does Your Mother Know
+            </span>
+            <address>
+              <span className={styles.Line}>
+                4141 18th St.
+              </span>
+              <span className={styles.Line}>
+                San Francisco, CA 94114
+              </span>
+              <span className={styles.Line}>
+                <a href={'tel:4158643160'}>
+                  <i className={'bi bi-telephone-fill pe-2'} aria-hidden={true}/>
+                  415-864-3160
+                </a>
+              </span>
+              <span className={styles.Line}>
+                <a href={'https://dymkmedia.wixsite.com/does-your-mother-k-1'}
+                   target={'_blank'}>
+                  <i className={'bi bi-globe2'} aria-hidden={true}/>
+                  <span className={'visually-hidden'}>
+                    website
+                  </span>
+                </a>
+              </span>
+            </address>
           </div>
         </div>
 
