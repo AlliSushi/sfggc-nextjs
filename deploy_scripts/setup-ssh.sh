@@ -72,7 +72,7 @@ SSH_CONFIG="$HOME/.ssh/config"
 CONFIG_ENTRY="Host $SERVER_ALIAS
     HostName $SSH_HOST
     User $SSH_USER
-    IdentityFile $KEY_PATH
+    IdentityFile \"$KEY_PATH\"
     IdentitiesOnly yes
 "
 
