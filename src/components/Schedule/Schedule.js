@@ -10,13 +10,13 @@ const Schedule = () => {
           name: 'Tournament Check-in',
           detail: 'Bowling center meeting room',
           more: '',
-          time: '4pm - 5:45pm',
+          time: '4:30pm - 6:45pm',
         },
         {
           name: 'Team Event',
           detail: 'Classic Bowling Center',
           more: '',
-          time: '6pm - 9pm',
+          time: '7pm - 10pm',
         },
       ]
     },
@@ -27,7 +27,7 @@ const Schedule = () => {
           name: 'Tournament Check-in',
           detail: 'Bowling center meeting room',
           more: '',
-          time: '12pm - 1:45pm',
+          time: '1:30pm - 2:15pm',
         },
         {
           name: 'Doubles and Singles Events',
