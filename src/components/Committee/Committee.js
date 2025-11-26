@@ -107,32 +107,35 @@ const Committee = () => {
               Committee &amp; Volunteers
             </div>
             <ul className="list-group list-group-flush">
-              {/*/!*<li className="list-group-item">*!/*/}
-              {/*/!*  Vince Wilson*!/*/}
-              {/*/!*</li>*!/*/}
+              <li className="list-group-item">
+                John Bernier
+              </li>
+              {/*<li className="list-group-item">*/}
+              {/*  Mark Bertelsen*/}
+              {/*</li>*/}
+              {/*<li className="list-group-item">*/}
+              {/*  Stephanie Godizano*/}
+              {/*</li>*/}
               {/*<li className="list-group-item">*/}
               {/*  Robert Hughes*/}
-              {/*</li>*/}
-              {/*<li className="list-group-item">*/}
-              {/*  Cathy Patterson*/}
-              {/*</li>*/}
-              {/*<li className="list-group-item">*/}
-              {/*  R.H. Ryan*/}
               {/*</li>*/}
               {/*<li className="list-group-item">*/}
               {/*  Stephen Ingram*/}
               {/*</li>*/}
               {/*<li className="list-group-item">*/}
-              {/*  Corey Lindabury*/}
+              {/*  Raymond Ledesma*/}
+              {/*</li>*/}
+              {/*<li className="list-group-item">*/}
+              {/*  Glenn Normandin*/}
               {/*</li>*/}
               {/*<li className="list-group-item">*/}
               {/*  Patrick O&apos;Connor*/}
               {/*</li>*/}
               {/*<li className="list-group-item">*/}
-              {/*  Mark Bertelsen*/}
+              {/*  Saman Oun*/}
               {/*</li>*/}
               {/*<li className="list-group-item">*/}
-              {/*  Saman Oun*/}
+              {/*  Richard Perez*/}
               {/*</li>*/}
             </ul>
           </div>
