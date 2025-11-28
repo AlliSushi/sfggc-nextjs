@@ -37,11 +37,12 @@ const Rules = () => {
       header: 'Entering Averages',
       markdown: `
 * Handicap: 90% of the difference between average and 225.
-* The Highest of Options A or B below:
-  * A. Composite League Average 2024-2025 (with at least 21 games bowled)
-  * B. IGBO Tournament Average (TAD) from 1/1/25 to 12/31/25 (minimum 9 games)
+* Averages will be taken from the following sources.  
+  * The Highest of Options A or B below:
+    * A.  Composite League Average 2024-2025 (with at least 21 games bowled)
+    * B.  IGBO Tournament Average (TAD) from 1/1/25 to 12/31/25 (minimum 9 games)
   * If neither of the above applies, then Option C below applies
-  * C. Composite League Average 2025-2026 as of 12/31/2025 (with at least 21 games bowled)
+    * C.  Composite League Average 2025-2026 as of 12/31/2025 (with at least 21 games bowled)
   * If NONE of the above applies, contact us as soon as possible (directors@goldengateclassic.org).
 * Averages must be verified via credible websites or documents.
 * Submitting an incorrect average will result in disqualification.
@@ -60,7 +61,7 @@ const Rules = () => {
       markdown: `
 * Fees: **$119** on or before Jan 16, 2026, **$129** after Jan 16, 2026.
 * Registration will not be considered complete until Entry Fees and Memberships are PAID IN FULL. 
-* Deadline: January 31, 2025. No refunds except at director’s discretion.
+* Deadline: January 31, 2026. No refunds except at director’s discretion.
 `,
     },
     {
