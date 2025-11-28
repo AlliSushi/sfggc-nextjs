@@ -61,7 +61,7 @@ const Rules = () => {
       markdown: `
 * Fees: **$119** on or before Jan 16, 2026, **$129** after Jan 16, 2026.
 * Registration will not be considered complete until Entry Fees and Memberships are PAID IN FULL. 
-* Deadline: January 31, 2025. No refunds except at director’s discretion.
+* Deadline: January 31, 2026. No refunds except at director’s discretion.
 `,
     },
     {
