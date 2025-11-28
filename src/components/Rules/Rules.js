@@ -37,7 +37,8 @@ const Rules = () => {
       header: 'Entering Averages',
       markdown: `
 * Handicap: 90% of the difference between average and 225.
-* The Highest of Options A or B below:
+* Averages will be taken from the following sources.  
+  * The Highest of Options A or B below:
     * A.  Composite League Average 2024-2025 (with at least 21 games bowled)
     * B.  IGBO Tournament Average (TAD) from 1/1/25 to 12/31/25 (minimum 9 games)
   * If neither of the above applies, then Option C below applies
