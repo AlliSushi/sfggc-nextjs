@@ -54,11 +54,11 @@ const Navigation = () => {
                 })}
 
                 {navLink({
-                  path: 'https://go.signmeup.io/?eventid=18',
+                  path: 'https://go.signmeup.io/?eventid=51',
                   text: 'Register',
-                  disabled: true,
+                  disabled: false,
                   // title: 'Get your team registered!',
-                  title: 'Registration is closed.'
+                  title: 'Registration is now open!'
                 })}
 
                 {/*<li className={`nav-item`}>*/}
