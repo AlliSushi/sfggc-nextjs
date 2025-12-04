@@ -10,14 +10,26 @@ const HostVenue = () => (
         The Pilsner Inn will be our Host Bar all Weekend.  Show up with your Tournament Badge to receive a $1 discount on drinks for the duration of the tournament.
       </p>
       <p>
-        225 Church St.
+        225 Church St. 
+      </p>
+      <p>  
+        San Francisco, CA 94114
       </p>
       <p>
-        San Francisco, CA 94114
+       <a href="https://www.pilsnerinn.com">
+        'https://www.pilsnerinn.com'
+       </a>
       </p>
 
     </div>
   </section>
 );
 
+
 export default HostVenue;
+
+
+
+
+
+
