@@ -47,10 +47,10 @@ const Schedule = () => {
           time: '10am - 1pm',
         },
         {
-          name: 'Cocktail Reception, Awards Ceremony and Banquet',
-          detail: 'Location TBD',
-          // more: 'We&apos;ll provide food between the Team event and Scratch Masters!',
-          time: '4pm - 8pm',
+          name: 'Cocktail Reception, Awards Ceremony and Small Bites',
+          detail: '300 Sports Bar & Lounge (Inside Classic Bowling Center)',
+          more: 'Approximately 30-45 min after Scratch Masters',
+          time: '1:30 / 1:45pm - 4pm',
         },
         // {
         //   name: 'Scratch Masters',
