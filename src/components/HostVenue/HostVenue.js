@@ -11,7 +11,7 @@ const HostVenue = () => (
       </p>
       <p>
         225 Church St.
-        San Francisco, CA 94114
+        <br>San Francisco, CA 94114
       </p>
       <p>
        <a href="https://www.pilsnerinn.com">
@@ -25,3 +25,4 @@ const HostVenue = () => (
 
 
 export default HostVenue;
+
