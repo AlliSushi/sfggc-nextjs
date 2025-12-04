@@ -11,8 +11,7 @@ const HostVenue = () => (
       </p>
       <p>
         225 Church St. 
-      </p>
-      <p>  
+      <br />
         San Francisco, CA 94114
       </p>
       <p>
@@ -27,6 +26,7 @@ const HostVenue = () => (
 
 
 export default HostVenue;
+
 
 
 
