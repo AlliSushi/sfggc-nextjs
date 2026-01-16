@@ -68,7 +68,7 @@ const Schedule = () => {
         Schedule of Events
       </h3>
       <p className={`${styles.Disclaimer}`}>
-        (*Tentative Schedule Only !  Final TBD*)
+        (Final Schedule)
       </p>
 
       {days.map((day, i) => (
