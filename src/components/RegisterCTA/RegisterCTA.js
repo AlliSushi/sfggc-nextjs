@@ -2,14 +2,18 @@ import styles from './RegisterCTA.module.scss';
 
 const REGISTER_URL = 'https://go.signmeup.io/?eventid=51';
 
-const RegisterCTA = () => (
+const RegisterCTA = ({ isOpen }) => (
   <div className={styles.RegisterCTA}>
     <p className={'my-5'}>
-      <a href={REGISTER_URL}
-         className={`btn btn-lg btn-success`}
-      >
+      {isOpen ? (
+        <a href={REGISTER_URL} className={`btn btn-lg btn-success`}>
         Register Online
-      </a>
+        </a>
+      ) : (
+        <button className=`btn btn-lg btn-success` disabled>
+          Registration Closed
+        </button>
+      )}
     </p>
   </div>
 )
