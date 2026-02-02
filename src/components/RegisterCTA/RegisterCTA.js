@@ -10,7 +10,7 @@ const RegisterCTA = ({ isOpen }) => (
         Register Online
         </a>
       ) : (
-        <button className=`btn btn-lg btn-success` disabled>
+        <button className="btn btn-lg btn-success" disabled>
           Registration Closed
         </button>
       )}
