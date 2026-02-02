@@ -32,8 +32,10 @@ const Spotlight = () => {
       <p>
         It&apos;s almost tournament weekend! We want to wish everyone a warm welcome to the Bay Area. Thank you for being part of our tournament; we literally could not do it without you!
       </p>
-      <p>Registration is now closed.  If you are still interested in bowling, please contact the directors (directors@goldengateclassic.org).
-      </p>     
+      <p>Registration is now closed.  If you are still interested in bowling, please contact the
+                <a href={'mailto:directors@goldengateclassic.org?subject=About%20the%20Golden%20Gate%20Classic'}>
+                  Tournament Directors.
+                </a>      </p>     
       <p>
         Keep an eye on this space for updates between now and the end of tournament weekend.
       </p>
