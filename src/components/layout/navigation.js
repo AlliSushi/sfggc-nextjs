@@ -56,9 +56,11 @@ const Navigation = () => {
                 {navLink({
                   path: 'https://go.signmeup.io/?eventid=51',
                   text: 'Register',
-                  disabled: false,
+                  // disabled: false,
+                  disabled: true,
                   // title: 'Get your team registered!',
-                  title: 'Registration is now open!'
+                  // title: 'Registration is now open!',
+                  title: 'Contact Directors for Registration Info!',
                 })}
 
                 {/*<li className={`nav-item`}>*/}
