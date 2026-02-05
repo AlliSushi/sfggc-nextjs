@@ -9,7 +9,8 @@ const Rules = () => {
     {
       header: 'Sanctioning & Membership',
       markdown: `
-* USBC-certified tournament; all participants need a USBC adult membership (purchase at https://bowl.com/).
+* USBC-certified tournament; all participants must hold a current USBC adult membership (purchase at https://bowl.com/). However, participants who choose not to be a USBC member may compete under SFGGC's Moral Support Tournament Certiciation for non-members.
+* Non-USBC particpants who bowl in an IGBO-sanctioned league may qualify for entry by paying a one-time tournament participation fee of $5.00 prior to the start of the tournament. These participants are subject to USBC rules for this tournament but are not eligible for USBC Awards.
 *	IGBO membership required (purchase at https://www.igbo.org/).
 `,
     },
