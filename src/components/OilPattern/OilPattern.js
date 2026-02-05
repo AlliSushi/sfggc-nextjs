@@ -1,6 +1,6 @@
 import Image from "next/image";
 import styles from './oilpattern.module.scss';
-import oilPatImage from '../../images/Easy Street V2.jpg';
+import oilPatImage from '../../images/Lithium.jpg';
 
 const OilPattern = () => {
   return (
@@ -11,11 +11,11 @@ const OilPattern = () => {
     <div>
       <hr />
       <div className={`row d-flex justify-content-center flex-wrap pb-0`}>
-{/*<div className={`col-6 col-md-5 col-lg-4`}>
+{<div className={`col-6 col-md-5 col-lg-4`}>
           <Image src={oilPatImage}
                  alt={'2026 Oil Pattern'}
                  className={`img-fluid oilPattern-image`}/>
-        </div>*/}
+        </div>}
         <p className={`col-12 text-center pt-3`}>
           <span>
             2026&nbsp;
@@ -24,7 +24,7 @@ const OilPattern = () => {
             SF Golden Gate Classic
           </span>
             <span className={'d-none d-md-inline pe-2'}>
-            TBA
+            Lithium
           </span>
         </p>
       </div>
@@ -33,4 +33,5 @@ const OilPattern = () => {
   )
 }
 export default OilPattern;
+
 
