@@ -152,7 +152,7 @@ If fewer than 8 bowlers sign up in a division, all participants will bowl in the
           (Also pending finalization)
         </p>
 
-{/*<div className={`${styles.Sponsor} row`}>
+{<div className={`${styles.Sponsor} row`}>
           <div className={'col-8 col-sm-6 text-end'}>
             <span className={styles.Intro}>
               Scratch Masters sponsored by
@@ -184,7 +184,7 @@ If fewer than 8 bowlers sign up in a division, all participants will bowl in the
               </span>
             </address>
           </div>
-        </div>*/}
+        </div>}
 
         <ReactMarkdown>{scratchMarkdown}</ReactMarkdown>
 
