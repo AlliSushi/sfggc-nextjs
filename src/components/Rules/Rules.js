@@ -183,6 +183,7 @@ If fewer than 8 bowlers sign up in a division, all participants will bowl in the
                 </a>
               </span>
             </address>
+            </div>
             <div className={'col-4 col-sm-3'}>
             <a href={'https://dymkmedia.wixsite.com/does-your-mother-k-1'}
                target={'_blank'}>
@@ -191,7 +192,6 @@ If fewer than 8 bowlers sign up in a division, all participants will bowl in the
                      alt={'Logo for Does Your Mother Know'}/>
             </a>
             </div>
-          </div>
         </div>}
 
         <ReactMarkdown>{scratchMarkdown}</ReactMarkdown>
