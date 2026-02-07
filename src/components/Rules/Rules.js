@@ -116,7 +116,7 @@ If fewer than 8 bowlers sign up in a division, all participants will bowl in the
         </h3>
 
         <p className={`text-md-center`}>
-          (Pending finalization)
+          (Finalized)
         </p>
 
         <p>
@@ -149,7 +149,7 @@ If fewer than 8 bowlers sign up in a division, all participants will bowl in the
         </h3>
 
         <p className={`text-md-center`}>
-          (Also pending finalization)
+          (Finalized)
         </p>
 
 {<div className={`${styles.Sponsor} row`}>
