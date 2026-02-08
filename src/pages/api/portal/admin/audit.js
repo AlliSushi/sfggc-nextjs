@@ -1,8 +1,8 @@
 import { query } from "../../../../utils/portal/db.js";
-import { methodNotAllowed } from "../../../../utils/portal/http.js";
+import { ensureAdminActionsTables } from "../../../../utils/portal/admins-server.js";
+import { internalServerError, methodNotAllowed } from "../../../../utils/portal/http.js";
 import { requireSuperAdmin } from "../../../../utils/portal/auth-guards.js";
-
-const AUDIT_RESULTS_LIMIT = 500;
+import { AUDIT_RESULTS_LIMIT } from "../../../../utils/portal/query-config.js";
 
 const buildSearch = (value) => `%${value}%`;
 
@@ -16,26 +16,16 @@ export default async function handler(req, res) {
     const payload = requireSuperAdmin(req, res);
     if (!payload) return;
 
-    await query(
-      `
-      create table if not exists admin_actions (
-        id char(36) primary key default (uuid()),
-        admin_email text not null,
-        action text not null,
-        details text,
-        created_at timestamp default current_timestamp
-      )
-      `
-    );
+    await ensureAdminActionsTables();
 
-    const q = (req.query?.q || "").trim();
+    const searchTerm = (req.query?.q || "").trim();
     const sort = (req.query?.sort || "desc").toLowerCase();
     const orderDirection = sort === "asc" ? "asc" : "desc";
     const params = [];
     const where = [];
 
-    if (q) {
-      const value = buildSearch(q);
+    if (searchTerm) {
+      const value = buildSearch(searchTerm);
       params.push(value, value, value, value);
       where.push(
         `(lower(a.admin_email) like lower(?)
@@ -49,8 +39,8 @@ export default async function handler(req, res) {
     const actionWhere = whereClause
       ? `where (lower(ev.admin_email) like lower(?) or lower(ev.action) like lower(?) or lower(ev.details) like lower(?))`
       : "";
-    if (q) {
-      const value = buildSearch(q);
+    if (searchTerm) {
+      const value = buildSearch(searchTerm);
       params.push(value, value, value);
     }
     const { rows } = await query(
@@ -92,6 +82,6 @@ export default async function handler(req, res) {
 
     res.status(200).json(rows || []);
   } catch (error) {
-    res.status(500).json({ error: error.message || "Unexpected error." });
+    internalServerError(res, error);
   }
 }
