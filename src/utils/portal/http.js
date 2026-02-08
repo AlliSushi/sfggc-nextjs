@@ -11,4 +11,8 @@ const forbidden = (res, message = "Forbidden") => {
   res.status(403).json({ error: message });
 };
 
-export { methodNotAllowed, unauthorized, forbidden };
+const internalServerError = (res, error) => {
+  res.status(500).json({ error: error.message || "Unexpected error." });
+};
+
+export { methodNotAllowed, unauthorized, forbidden, internalServerError };
