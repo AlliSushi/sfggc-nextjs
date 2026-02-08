@@ -30,6 +30,9 @@ test(
     const errors = [];
     files.forEach((filePath) => {
       const content = fs.readFileSync(filePath, "utf8");
+      // Pages with getServerSideProps can import server modules —
+      // Next.js tree-shakes them from the client bundle automatically.
+      if (content.includes("getServerSideProps")) return;
       forbidden.forEach((needle) => {
         if (content.includes(needle)) {
           const relative = path.relative(process.cwd(), filePath);

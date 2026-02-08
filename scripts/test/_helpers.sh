@@ -228,11 +228,14 @@ drop_test_db_if_success() {
   fi
 
   echo "Dropping test database ${db_name}..."
+  local drop_cmd="drop database if exists \`${db_name}\`;"
   set +e
   if [[ -n "${password}" ]]; then
-    MYSQL_PWD="${password}" mysql --protocol=tcp -h "${host}" -P "${port}" -u "${user}" mysql -e "drop database if exists \`${db_name}\`;"
+    MYSQL_PWD="${password}" mysql --protocol=tcp -h "${host}" -P "${port}" -u "${user}" mysql -e "${drop_cmd}" 2>/dev/null
   else
-    mysql --protocol=tcp -h "${host}" -P "${port}" -u "${user}" mysql -e "drop database if exists \`${db_name}\`;"
+    # Try TCP first; fall back to socket for unix_auth (common on macOS Homebrew MariaDB).
+    mysql --protocol=tcp -h "${host}" -P "${port}" -u "${user}" mysql -e "${drop_cmd}" 2>/dev/null \
+      || mysql -u "${user}" mysql -e "${drop_cmd}" 2>/dev/null
   fi
   local drop_status=$?
   set -e

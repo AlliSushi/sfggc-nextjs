@@ -31,7 +31,7 @@ const lintNoUndef = (filePath) => {
 test(
   "Given portal admin pages, when linting for undefined vars, then none are reported",
   () => {
-    const filesToCheck = ["src/pages/portal/admin/admins.js"];
+    const filesToCheck = ["src/pages/portal/admin/admins/index.js"];
     const errors = filesToCheck.flatMap((relativePath) => {
       const fullPath = path.join(process.cwd(), relativePath);
       const messages = lintNoUndef(fullPath);
