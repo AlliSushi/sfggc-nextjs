@@ -1,16 +1,18 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { query } from "../../../../utils/portal/db.js";
+import { BCRYPT_ROUNDS } from "../../../../utils/portal/auth-config.js";
+import { query, withTransaction } from "../../../../utils/portal/db.js";
 import {
   ensureAdminResetTables,
   requireSuperAdmin,
 } from "../../../../utils/portal/admins-server.js";
 import { methodNotAllowed } from "../../../../utils/portal/http.js";
-import { sendAdminWelcomeEmail } from "../../../../utils/portal/send-login-email.js";
 import { ROLE_SUPER_ADMIN, ROLE_TOURNAMENT_ADMIN } from "../../../../utils/portal/roles.js";
-
-const RESET_TTL_MS = 60 * 60 * 1000;
-const randomToken = () => crypto.randomBytes(24).toString("hex");
+import { sendAdminWelcomeEmail } from "../../../../utils/portal/send-login-email.js";
+import {
+  ADMIN_PASSWORD_RESET_TTL_MS,
+  generateSecureToken,
+} from "../../../../utils/portal/session.js";
 
 export default async function handler(req, res) {
   try {
@@ -26,7 +28,7 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const { rows } = await query(
         `
-        select id, email, first_name, last_name, phone, role, created_at
+        select id, email, first_name, last_name, phone, role, pid, created_at
         from admins
         order by created_at desc
         `
@@ -74,33 +76,35 @@ export default async function handler(req, res) {
       return;
     }
 
-    const passwordHash = await bcrypt.hash(initialPassword, 10);
+    const passwordHash = await bcrypt.hash(initialPassword, BCRYPT_ROUNDS);
     const adminId = crypto.randomUUID();
-    await query(
-      `
-      insert into admins (id, email, first_name, last_name, phone, password_hash, role, name, pid)
-      values (?,?,?,?,?,?,?,?,?)
-      `,
-      [
-        adminId,
-        normalizedEmail || null,
-        firstName,
-        lastName,
-        normalizedPhone || null,
-        passwordHash,
-        role,
-        `${firstName} ${lastName}`.trim(),
-        pid || null,
-      ]
-    );
-    const resetToken = randomToken();
-    await query(
-      `
-      insert into admin_password_resets (admin_id, token, expires_at)
-      values (?,?,?)
-      `,
-      [adminId, resetToken, new Date(Date.now() + RESET_TTL_MS)]
-    );
+    const resetToken = generateSecureToken();
+    await withTransaction(async (connQuery) => {
+      await connQuery(
+        `
+        insert into admins (id, email, first_name, last_name, phone, password_hash, role, name, pid)
+        values (?,?,?,?,?,?,?,?,?)
+        `,
+        [
+          adminId,
+          normalizedEmail || null,
+          firstName,
+          lastName,
+          normalizedPhone || null,
+          passwordHash,
+          role,
+          `${firstName} ${lastName}`.trim(),
+          pid || null,
+        ]
+      );
+      await connQuery(
+        `
+        insert into admin_password_resets (admin_id, token, expires_at)
+        values (?,?,?)
+        `,
+        [adminId, resetToken, new Date(Date.now() + ADMIN_PASSWORD_RESET_TTL_MS)]
+      );
+    });
 
     try {
       if (normalizedEmail) {

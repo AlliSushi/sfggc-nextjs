@@ -1,28 +1,14 @@
 import bcrypt from "bcryptjs";
+import { BCRYPT_ROUNDS } from "../../../../utils/portal/auth-config.js";
 import { query } from "../../../../utils/portal/db.js";
 import {
-  ADMIN_SESSION_TTL_MS,
-  COOKIE_ADMIN,
   COOKIE_ADMIN_RESET,
-  buildSessionToken,
-  buildCookieString,
+  buildExpiredCookie,
   parseCookies,
 } from "../../../../utils/portal/session.js";
 import { ensureAdminResetTables } from "../../../../utils/portal/admins-server.js";
 import { methodNotAllowed } from "../../../../utils/portal/http.js";
-
-const MIN_PASSWORD_LENGTH = 12;
-const WEAK_TOKENS = ["password", "123456", "qwerty", "letmein", "admin", "welcome"];
-
-const isStrongPassword = (value) => {
-  if (!value || value.length < MIN_PASSWORD_LENGTH) return false;
-  if (!/[a-z]/.test(value)) return false;
-  if (!/[A-Z]/.test(value)) return false;
-  if (!/[0-9]/.test(value)) return false;
-  const lower = value.toLowerCase();
-  if (WEAK_TOKENS.some((token) => lower.includes(token))) return false;
-  return true;
-};
+import { validatePassword } from "../../../../utils/portal/validators.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -39,8 +25,9 @@ export default async function handler(req, res) {
     res.status(400).json({ error: "Passwords do not match." });
     return;
   }
-  if (!isStrongPassword(password)) {
-    res.status(400).json({ error: "Password does not meet requirements." });
+  const passwordError = validatePassword(password);
+  if (passwordError) {
+    res.status(400).json({ error: passwordError });
     return;
   }
 
@@ -68,35 +55,17 @@ export default async function handler(req, res) {
       return;
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     await query("update admins set password_hash = ? where id = ?", [
       passwordHash,
       reset.admin_id,
     ]);
-    await query("update admin_password_resets set used_at = now() where id = ?", [
-      reset.id,
-    ]);
-
-    const adminRows = await query(
-      "select email, role from admins where id = ?",
+    await query(
+      "update admin_password_resets set used_at = now() where admin_id = ? and used_at is null",
       [reset.admin_id]
     );
-    const admin = adminRows.rows[0];
-    const cookies = [
-      buildCookieString(COOKIE_ADMIN_RESET, "", 0),
-    ];
-    if (admin) {
-      const tokenValue = buildSessionToken(
-        { email: admin.email, role: admin.role },
-        ADMIN_SESSION_TTL_MS
-      );
-      const maxAgeSeconds = Math.floor(ADMIN_SESSION_TTL_MS / 1000);
-      cookies.push(
-        buildCookieString(COOKIE_ADMIN, tokenValue, maxAgeSeconds)
-      );
-    }
 
-    res.setHeader("Set-Cookie", cookies);
+    res.setHeader("Set-Cookie", buildExpiredCookie(COOKIE_ADMIN_RESET));
     res.status(200).json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: error.message || "Unexpected error." });
