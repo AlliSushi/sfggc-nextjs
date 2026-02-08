@@ -348,6 +348,12 @@ If you encounter issues:
 3. Test with a simple HTML file first
 4. Contact your hosting provider if needed
 
+## Portal Backend
+
+The portal (admin dashboard + participant login) runs as a **Next.js server application**, not a static site. It requires Node.js, MariaDB, and SMTP access on the server.
+
+For complete portal deployment instructions, see [PORTAL_DEPLOYMENT.md](PORTAL_DEPLOYMENT.md).
+
 ## Security Notes
 
 - Keep your SSH keys secure
