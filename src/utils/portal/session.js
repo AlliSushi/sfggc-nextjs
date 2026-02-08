@@ -1,5 +1,7 @@
 import crypto from "crypto";
 
+const generateSecureToken = () => crypto.randomBytes(24).toString("hex");
+
 const getSecret = () => {
   const secret = process.env.ADMIN_SESSION_SECRET;
   if (!secret) {
@@ -61,6 +63,7 @@ const buildSessionToken = ({ email, role, pid }, ttlMs = 24 * 60 * 60 * 1000) =>
 const ADMIN_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 const PARTICIPANT_SESSION_TTL_MS = 48 * 60 * 60 * 1000;
 const PARTICIPANT_LINK_TTL_MS = 30 * 60 * 1000;
+const ADMIN_PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 
 const COOKIE_ADMIN = "portal_admin";
 const COOKIE_PARTICIPANT = "portal_participant";
@@ -117,6 +120,8 @@ const buildCookieString = (name, value, maxAgeSeconds) => {
   return parts.join("; ");
 };
 
+const buildExpiredCookie = (cookieName) => buildCookieString(cookieName, "", 0);
+
 export {
   buildSessionToken,
   verifyToken,
@@ -124,6 +129,8 @@ export {
   getAdminSession,
   getParticipantSession,
   buildCookieString,
+  buildExpiredCookie,
+  generateSecureToken,
   COOKIE_ADMIN,
   COOKIE_PARTICIPANT,
   COOKIE_ADMIN_RESET,
@@ -131,4 +138,5 @@ export {
   ADMIN_SESSION_TTL_MS,
   PARTICIPANT_SESSION_TTL_MS,
   PARTICIPANT_LINK_TTL_MS,
+  ADMIN_PASSWORD_RESET_TTL_MS,
 };
