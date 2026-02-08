@@ -1,0 +1,52 @@
+.ScoreCard {
+  margin-bottom: 0.5rem;
+}
+
+.ScoreBoxes {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ScoreBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  min-width: 4.5rem;
+  background-color: var(--bs-body-bg);
+}
+
+.TotalBox {
+  font-weight: 600;
+  background-color: var(--bs-light, #f8f9fa);
+}
+
+.ScoreLabel {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bs-secondary);
+  margin-bottom: 0.125rem;
+}
+
+.ScoreValue {
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
+@media (max-width: 575.98px) {
+  .ScoreBoxes {
+    gap: 0.25rem;
+  }
+
+  .ScoreBox {
+    min-width: 3.5rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .ScoreValue {
+    font-size: 1rem;
+  }
+}

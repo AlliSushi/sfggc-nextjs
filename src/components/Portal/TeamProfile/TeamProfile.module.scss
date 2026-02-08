@@ -1,0 +1,61 @@
+.TeamProfile {
+  .RosterTable {
+    margin-bottom: 0;
+  }
+
+  .RosterHeader {
+    padding: 0 0.5rem 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .RosterCell {
+    padding: 0.25rem 0.5rem;
+    vertical-align: top;
+  }
+
+  .MemberCard {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--bs-body-bg);
+  }
+
+  .MemberName {
+    line-height: 1.2;
+  }
+
+  .CaptainLabel {
+    font-weight: 400;
+  }
+
+  @media (max-width: 575.98px) {
+    .RosterTable {
+      :global(thead) {
+        display: none;
+      }
+
+      :global(tbody),
+      :global(tr),
+      :global(td) {
+        display: block;
+        width: 100%;
+      }
+
+      :global(tr) {
+        margin-bottom: 0.5rem;
+      }
+    }
+
+    .RosterCell {
+      border: 1px solid var(--bs-border-color);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .RosterCell:last-child {
+      margin-bottom: 0;
+    }
+  }
+}
