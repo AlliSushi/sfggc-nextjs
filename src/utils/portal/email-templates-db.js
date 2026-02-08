@@ -91,6 +91,19 @@ const DEFAULT_TEMPLATES = [
     use_html_override: false,
     available_variables: '["firstName","lastName","email","password","loginUrl"]',
   },
+  {
+    slug: "admin-password-reset",
+    name: "Admin Password Reset",
+    subject: "Reset your Golden Gate Classic admin password",
+    greeting: "Hello, {{firstName}}!",
+    body: "We received a request to reset your admin password. Click the button below to set a new password.",
+    button_text: "Reset Password",
+    footer:
+      "This link will expire in 1 hour. If you didn't request this, you can safely ignore this email.",
+    html_override: "",
+    use_html_override: false,
+    available_variables: '["resetUrl","firstName","email"]',
+  },
 ];
 
 const seedDefaultTemplates = async (q = defaultQuery) => {

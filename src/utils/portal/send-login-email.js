@@ -17,6 +17,9 @@ const buildVerifyUrl = (token) =>
 
 const buildAdminLoginUrl = () => `${BASE_URL}/portal/`;
 
+const buildResetUrl = (token) =>
+  `${BASE_URL}/portal/admin/reset?token=${token}`;
+
 const getTransporter = () =>
   nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -81,10 +84,22 @@ const sendAdminWelcomeEmail = async ({ email, firstName, lastName, password, que
   });
 };
 
+const sendPasswordResetEmail = async ({ email, firstName, resetUrl, query }) => {
+  await sendTemplatedEmail({
+    to: email,
+    slug: "admin-password-reset",
+    variables: { resetUrl, firstName, email },
+    buttonUrl: resetUrl,
+    query,
+  });
+};
+
 export {
   sendLoginEmail,
   sendAdminWelcomeEmail,
+  sendPasswordResetEmail,
   sendTemplatedEmail,
   buildVerifyUrl,
+  buildResetUrl,
   smtpConfigured,
 };

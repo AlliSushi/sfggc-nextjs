@@ -3,6 +3,12 @@ import { useState } from "react";
 import RootLayout from "../../../components/layout/layout";
 import PortalShell from "../../../components/Portal/PortalShell/PortalShell";
 import { portalFetch } from "../../../utils/portal/portal-fetch.js";
+import { query } from "../../../utils/portal/db.js";
+import { ensureAdminResetTables } from "../../../utils/portal/admins-server.js";
+import {
+  COOKIE_ADMIN_RESET,
+  parseCookies,
+} from "../../../utils/portal/session.js";
 
 const AdminResetPasswordPage = () => {
   const router = useRouter();
@@ -26,7 +32,7 @@ const AdminResetPasswordPage = () => {
       setIsSubmitting(false);
       return;
     }
-    await router.push("/portal/admin/dashboard");
+    await router.push("/portal/admin/");
   };
 
   return (
@@ -72,6 +78,36 @@ const AdminResetPasswordPage = () => {
       </PortalShell>
     </div>
   );
+};
+
+export const getServerSideProps = async ({ req }) => {
+  const LOGIN_REDIRECT = {
+    redirect: { destination: "/portal/admin/", permanent: false },
+  };
+
+  try {
+    const cookies = parseCookies(req.headers.cookie || "");
+    const token = cookies[COOKIE_ADMIN_RESET];
+    if (!token) return LOGIN_REDIRECT;
+
+    await ensureAdminResetTables();
+    const { rows } = await query(
+      `select id, used_at, expires_at
+       from admin_password_resets
+       where token = ?
+       limit 1`,
+      [token]
+    );
+    const reset = rows[0];
+    if (!reset || reset.used_at || new Date(reset.expires_at) < new Date()) {
+      return LOGIN_REDIRECT;
+    }
+
+    return { props: {} };
+  } catch (error) {
+    console.error("[reset-password] SSR guard error:", error.message);
+    return LOGIN_REDIRECT;
+  }
 };
 
 AdminResetPasswordPage.getLayout = function getLayout(page) {
