@@ -4,6 +4,12 @@ export const resolveAdminLookupStep = ({ admin, participant }) => {
   return "create";
 };
 
+export const canRevokeAdmin = (admin, currentAdminEmail, superAdminCount) => {
+  if (admin.email === currentAdminEmail) return false;
+  if (admin.role === "super-admin" && superAdminCount <= 1) return false;
+  return true;
+};
+
 export const buildAdminPrefill = (lookupValue) => {
   const trimmed = (lookupValue || "").trim();
   if (!trimmed) {
