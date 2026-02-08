@@ -5,10 +5,10 @@ import {useRouter} from "next/router";
 const Navigation = () => {
   const router = useRouter();
 
-  const linkClicked = (event) => {
+  const linkClicked = (event, disabled) => {
     event.preventDefault();
-    console.log(event.target.href);
-    router.push(event.target.href);
+    if (disabled) return;
+    router.push(event.currentTarget.href);
   }
 
   const navLink = ({path, text, title = '', disabled = false}) => (
@@ -16,7 +16,9 @@ const Navigation = () => {
         title={title}>
       <Link className={`nav-link ${disabled ? 'disabled' : ''}`}
             href={path}
-            onClick={linkClicked}
+            onClick={(event) => linkClicked(event, disabled)}
+            aria-disabled={disabled || undefined}
+            tabIndex={disabled ? -1 : undefined}
             data-bs-toggle={'collapse'}
             data-bs-target={'.navbar-collapse.show'}
       >
@@ -108,6 +110,11 @@ const Navigation = () => {
                   text: 'Results',
                   disabled: false,
                   title: '2025 results are here',
+                })}
+
+                {navLink({
+                  path: '/portal/',
+                  text: 'Login',
                 })}
 
               </ul>

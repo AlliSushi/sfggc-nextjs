@@ -57,6 +57,14 @@ If you encounter server permission issues or other deployment problems, see [SER
 - Using **Apache**: The deployment script automatically configures `.htaccess` for you
 - Using **Nginx**: See the nginx configuration guides in [`deploy_docs/`](deploy_docs/) for setup instructions
 
+## Portal
+
+The repository also includes a tournament portal for admin and participant access. The portal runs as a Next.js server application with MariaDB.
+
+- **Portal documentation**: [`portal_docs/README.md`](portal_docs/README.md)
+- **Setup guide**: [`portal_docs/PORTAL_SETUP.md`](portal_docs/PORTAL_SETUP.md)
+- **Portal deployment**: [`deploy_docs/PORTAL_DEPLOYMENT.md`](deploy_docs/PORTAL_DEPLOYMENT.md)
+
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
