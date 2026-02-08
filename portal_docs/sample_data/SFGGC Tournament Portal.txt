@@ -1,0 +1,72 @@
+﻿I want to build a frontend for a database that helps manage bowlers for an upcoming bowling tournament. The following IDs explain the various records in the CSV files. My main goal is to import the CSV files into a database, which will then serve as the source of truth. For now consider these CSVs as sample files so we can prototype and work on the app.
+* PID = Person ID is the unique ID of people who are participating in the tournament
+* Email = the email to contact that person or what the person will use to look up their results, what lanes they’ll be bowling on, etc.
+* FirstName = Person’s first name
+* LastName = Person’s last name
+* TnmtID = The team that a person belongs to
+* Team_Name = the human-readable team name
+* DID = the Doubles Team ID of the person
+* PartnerID = The person’s doubles partner
+* T_Lane = the person’s lane for the team event
+* D_Lane = the person’s lane for the doubles event
+* S_Lane = the person’s lane for the singles event
+* Avg = the person’s entering bowling average
+* Hdcp = the person’s entering handicap
+* T_Gm1, T_Gm2, T_Gm3 = the person’s score for each of their games in the team event (3 games total)
+* D_Gm1, D_Gm2, D_Gm3 = the person’s score for each of their games in the doubles event
+* S_Gm1, S_Gm2, S_Gm3 = the person’s score for each of their games in the singles event
+
+
+Here are the CSV files and what they represent:
+* SFGGC Sample Table - EventEntries.csv = data from the registration site
+* SFGGC Sample Table - Singles.csv = data for singles event for all registered participants
+* SFGGC Sample Table - Doubles.csv = data for singles event for all registered participants
+* SFGGC Sample Table - Teams.csv = data for teams event for all registered participants
+* SFGGC Sample Table - Bowlers.csv = bowler information for each of the registered participants
+* SFGGC Sample Table - Tournament.csv
+
+
+Most of the data will be imported via XML, not CSV. The CSV files were made to help in understanding the data. We will be importing the XML from the tournament registration software.
+
+
+As an administrator, here are the features that I need from the tournament portal:
+* Ability to  log in with a secure password, log in with a link sent via email, or SSO.
+* Admins have various roles:
+   * super-admin - access to everything on the site
+   * tournament admin - access to registered participants and their data
+   * results manager - access to results of the Singles, doubles, and team matches; ability to import data from these matches, ability to change data 
+* Action logging - to be able to see who changed one as a super admin to check all other admins to be able to track down potential errors (e.g., incorrect data update by person at certain time)
+* Manage lifecycle of tournament. Super-admin will be called out explicitly, but admins should be able to:
+   * Super-admin to create accounts of other admins, import registration XML and CSV data
+   * Open and close registration
+   * Other admins can import scores from tournament software
+   * Export of various tables either in XML or CSV
+   * Ability to map IDs from import in case we need to change some of the mappings.
+   * Ability to edit participant information, demographic info, tournament info like associated doubles partners, etc.
+   * Ability to substitute participants, create substitutes if registered players can’t participate for one reason or the other
+* The software should automatically do the following once data has been entered
+   * Ranking of teams, doubles team, and singles once results are entered. This could be ongoing where the overall rankins are also needed (combination of all 3)
+   * Admins should only have access to this overall info and data
+   * Admins should be able to publish official results pages for Singles, Doubles, Team events, as well as overall tournament results.
+* For participants:
+   * Be able to login by providing their email or phone, and a link sent back to them displaying their info page.
+   * Each participant can also have a unique QR code that is associated with their ID so that they can use it. The QR codes are potentially printed on their registration id cards.
+   * Be able to upload a photo if they wish
+   * They should be able to view information about themselves, how they did in singles, how they did in doubles along with their doubles partner, how they did as a team
+   * Substitutes may not necessarily be in Teams, Doubles, or Singles since they are substitutes and my enter one or more event depending on the circumstances. They won’t have complete tournament records in this case because of their nature as a substitute
+   * The participants info page should be able to show:
+      * their information
+      * their lane assignments for the various events
+      * Their singles, doubles, and team scores
+      * Their tournament averages in the various events, as well as their overall calculated average
+   * The only data that they can see are from their doubles partners, or team members. They can’t see info from other folks.
+   * When official results are published, see all the official results, seeing participants names, team names, doubles partners, and photos and their scores and rankings only.
+
+
+The first thing I want to build is the main page for this portal. The main page should ask if the person is a participant or not. If they say participant, it should go to a page that asks for the email or phone number. When they enter it, an acknowledgement page informs them to check their email or phone and click on the supplied link that gets them in. The session should last a day, before they are asked to re-enter. The web page should not give an indication if the info they entered is known or not, to prevent people from fishing the site to find out if email addresses or phone numbers work. They shouldn’t get any error messages as a security measure.
+
+
+If the user said that they are not a participant, they are sent to a login page with the email and password that they enter. They have 3 tries after which if they fail to enter a valid email and password, they are sent to a page that asks them to enter their email address to reset their password. They enter their email, and an acknowledgement page comes up saying to check their email. Nothing else is shown so that the person can’t fish for possible emails if they enter an incorrect email.
+
+
+I want this login page to live under https://www.goldengateclassic.org/portal - and all other pages for the tournament should live underneath this URL, e.g., https://www.goldengateclassic.org/portal/user_id for a participant’s page, for example, or https://www.goldengateclassic.org/portal/admin if an administrator logs in.

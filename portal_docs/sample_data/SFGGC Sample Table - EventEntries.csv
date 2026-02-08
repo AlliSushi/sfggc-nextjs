@@ -1,0 +1,2 @@
+PID,FirstName,LastName,Email,TID,Team_Name,DID,PartnerID,T_Lane,D_Lane,S_Lane,Avg,Hdcp,T_Gm1,T_Gm2,T_Gm3,D_Gm1,D_Gm2,D_Gm3,S_Gm1,S_Gm2,S_Gm3
+3336,Robert,Aldeguer,robert@example.com,2305,Well No Split,1076,,A,B,C,180,10,200,190,180,170,160,150,140,130,120
