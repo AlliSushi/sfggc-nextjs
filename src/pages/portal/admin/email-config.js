@@ -20,6 +20,11 @@ const SAMPLE_VARIABLES = {
     password: "TempPass123",
     loginUrl: "https://example.com/portal/admin",
   },
+  "admin-password-reset": {
+    resetUrl: "https://www.goldengateclassic.org/portal/admin/reset?token=abc123def456",
+    firstName: "Jane",
+    email: "jane@example.com",
+  },
 };
 
 const TABS = ["fields", "html-override", "preview"];

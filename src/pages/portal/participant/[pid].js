@@ -3,10 +3,12 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import RootLayout from "../../../components/layout/layout";
 import PortalShell from "../../../components/Portal/PortalShell/PortalShell";
+import PortalModal from "../../../components/Portal/PortalModal/PortalModal";
 import ParticipantProfile from "../../../components/Portal/ParticipantProfile/ParticipantProfile";
 import ParticipantEditForm from "../../../components/Portal/ParticipantEditForm/ParticipantEditForm";
 import AuditLogTable from "../../../components/Portal/AuditLogTable/AuditLogTable";
 import MakeAdminModal from "../../../components/Portal/MakeAdminModal/MakeAdminModal";
+import AdminMenu from "../../../components/Portal/AdminMenu/AdminMenu";
 import useAdminSession from "../../../hooks/portal/useAdminSession.js";
 import { buildParticipantPageProps } from "../../../utils/portal/participant-page-ssr.js";
 import { portalFetch } from "../../../utils/portal/portal-fetch.js";
@@ -82,6 +84,10 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
   const [auditLogs, setAuditLogs] = useState([]);
   const { isAdmin, adminRole } = useAdminSession();
   const [showMakeAdmin, setShowMakeAdmin] = useState(false);
+  const [linkedAdmin, setLinkedAdmin] = useState(null);
+  const [showRevokeAdmin, setShowRevokeAdmin] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState("");
 
   const adminEmailHeader = useMemo(() => {
     if (process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
@@ -94,6 +100,16 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
     setParticipant(initialParticipant);
     setFormState(buildFormState(initialParticipant));
   }, [initialParticipant]);
+
+  useEffect(() => {
+    if (!participant?.email || adminRole !== "super-admin") return;
+    portalFetch(`/api/portal/admins/lookup?q=${encodeURIComponent(participant.email)}`)
+      .then((response) => response.json())
+      .then((data) => {
+        setLinkedAdmin(data?.admin || null);
+      })
+      .catch(() => setLinkedAdmin(null));
+  }, [participant?.email, adminRole, showMakeAdmin, showRevokeAdmin]);
 
   useEffect(() => {
     if (!pid || adminRole !== "super-admin") return;
@@ -146,13 +162,37 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
     setFormState(buildFormState(participant));
   };
 
+  const handleRevokeAdmin = async () => {
+    if (!linkedAdmin) return;
+    setIsRevoking(true);
+    setRevokeError("");
+    try {
+      const response = await portalFetch(`/api/portal/admins/${linkedAdmin.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        setRevokeError(data?.error || "Unable to revoke admin.");
+        setIsRevoking(false);
+        return;
+      }
+      setLinkedAdmin(null);
+      setShowRevokeAdmin(false);
+      setIsRevoking(false);
+    } catch (err) {
+      setRevokeError("Unable to revoke admin.");
+      setIsRevoking(false);
+    }
+  };
+
   return (
     <div>
       <PortalShell
         title="Participant details"
         subtitle="Review your lanes, partner, and scores."
       >
-        <div className="mb-3 d-flex flex-wrap gap-2 portal-actions">
+        <div className="row g-3 mb-3 align-items-end">
+          <div className="col-12 col-md-6 d-flex flex-wrap gap-2 portal-actions">
           {isAdmin && (
             <Link className="btn btn-outline-secondary" href="/portal/admin/dashboard">
               Back to dashboard
@@ -167,13 +207,22 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
               Edit participant
             </button>
           )}
-          {adminRole === "super-admin" && !isEditing && (
+          {adminRole === "super-admin" && !isEditing && !linkedAdmin && (
             <button
               className="btn btn-outline-primary"
               type="button"
               onClick={() => setShowMakeAdmin(true)}
             >
               Make admin
+            </button>
+          )}
+          {adminRole === "super-admin" && !isEditing && linkedAdmin && (
+            <button
+              className="btn btn-outline-danger"
+              type="button"
+              onClick={() => setShowRevokeAdmin(true)}
+            >
+              Revoke admin
             </button>
           )}
           {isAdmin && isEditing && (
@@ -194,6 +243,12 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
                 Cancel
               </button>
             </>
+          )}
+          </div>
+          {isAdmin && (
+            <div className="col-12 col-md-6 text-md-end">
+              <AdminMenu adminRole={adminRole} />
+            </div>
           )}
         </div>
 
@@ -216,6 +271,43 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
             participant={participant}
             onClose={() => setShowMakeAdmin(false)}
           />
+        )}
+
+        {showRevokeAdmin && linkedAdmin && (
+          <PortalModal
+            title="Revoke admin access"
+            onClose={() => { if (!isRevoking) setShowRevokeAdmin(false); }}
+            actions={
+              <>
+                <button
+                  className="btn btn-outline-secondary"
+                  type="button"
+                  disabled={isRevoking}
+                  onClick={() => setShowRevokeAdmin(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-danger"
+                  type="button"
+                  disabled={isRevoking}
+                  onClick={handleRevokeAdmin}
+                >
+                  {isRevoking ? "Revoking..." : "Revoke access"}
+                </button>
+              </>
+            }
+          >
+            <p>
+              Are you sure you want to revoke admin access for{" "}
+              <strong>{participant?.firstName} {participant?.lastName}</strong>
+              {participant?.email ? ` (${participant.email})` : ""}?
+            </p>
+            <p className="text-muted mb-0">
+              This action will be recorded in the audit log.
+            </p>
+            {revokeError && <div className="alert alert-danger mt-3">{revokeError}</div>}
+          </PortalModal>
         )}
       </PortalShell>
     </div>

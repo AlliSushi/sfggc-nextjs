@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
-import RootLayout from "../../../components/layout/layout";
-import PortalShell from "../../../components/Portal/PortalShell/PortalShell";
-import PortalModal from "../../../components/Portal/PortalModal/PortalModal";
-import { requireSuperAdminSSR } from "../../../utils/portal/ssr-helpers.js";
-import AdminMenu from "../../../components/Portal/AdminMenu/AdminMenu";
-import { portalFetch } from "../../../utils/portal/portal-fetch.js";
+import Link from "next/link";
+import RootLayout from "../../../../components/layout/layout";
+import PortalShell from "../../../../components/Portal/PortalShell/PortalShell";
+import PortalModal from "../../../../components/Portal/PortalModal/PortalModal";
+import { requireSuperAdminSSR } from "../../../../utils/portal/ssr-helpers.js";
+import AdminMenu from "../../../../components/Portal/AdminMenu/AdminMenu";
+import { portalFetch } from "../../../../utils/portal/portal-fetch.js";
 import {
   buildAdminPrefill,
+  canRevokeAdmin,
   resolveAdminLookupStep,
-} from "../../../utils/portal/admins-client.js";
+} from "../../../../utils/portal/admins-client.js";
 
-const AdminsPage = ({ adminRole }) => {
+const AdminsPage = ({ adminRole, adminEmail }) => {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -29,11 +31,23 @@ const AdminsPage = ({ adminRole }) => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [revokeTarget, setRevokeTarget] = useState(null);
+  const [showRevokeModal, setShowRevokeModal] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState("");
+
+  const superAdminCount = admins.filter((a) => a.role === "super-admin").length;
+
   const loadAdmins = async () => {
     setLoading(true);
     setError("");
     try {
       const response = await portalFetch("/api/portal/admins");
+      if (!response.ok) {
+        setError(`Unable to load admins (${response.status}).`);
+        setAdmins([]);
+        return;
+      }
       const data = await response.json();
       if (Array.isArray(data)) {
         setAdmins(data);
@@ -133,6 +147,43 @@ const AdminsPage = ({ adminRole }) => {
     }
   };
 
+  const openRevokeModal = (admin) => {
+    setRevokeTarget(admin);
+    setRevokeError("");
+    setShowRevokeModal(true);
+  };
+
+  const handleRevoke = async () => {
+    if (!revokeTarget) return;
+    setIsRevoking(true);
+    setRevokeError("");
+    try {
+      const response = await portalFetch(`/api/portal/admins/${revokeTarget.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        setRevokeError(data?.error || "Unable to revoke admin.");
+        setIsRevoking(false);
+        return;
+      }
+      setShowRevokeModal(false);
+      setRevokeTarget(null);
+      await loadAdmins();
+    } catch (err) {
+      setRevokeError("Unable to revoke admin.");
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+
+  const adminDisplayName = (admin) => {
+    if (admin.first_name || admin.last_name) {
+      return `${admin.first_name || ""} ${admin.last_name || ""}`.trim();
+    }
+    return admin.name || "";
+  };
+
   return (
     <div>
       <PortalShell title="Admins" subtitle="Manage admin accounts and roles.">
@@ -158,20 +209,36 @@ const AdminsPage = ({ adminRole }) => {
                   <th>Phone</th>
                   <th>Role</th>
                   <th>Created</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {admins.map((admin) => (
                   <tr key={admin.id}>
-                    <td>{admin.email || "—"}</td>
                     <td>
-                      {admin.first_name || admin.last_name
-                        ? `${admin.first_name || ""} ${admin.last_name || ""}`.trim()
-                        : admin.name || "—"}
+                      <Link href={`/portal/admin/admins/${admin.id}`}>
+                        {admin.email || "\u2014"}
+                      </Link>
                     </td>
-                    <td>{admin.phone || "—"}</td>
+                    <td>
+                      <Link href={`/portal/admin/admins/${admin.id}`}>
+                        {adminDisplayName(admin) || "\u2014"}
+                      </Link>
+                    </td>
+                    <td>{admin.phone || "\u2014"}</td>
                     <td>{admin.role}</td>
-                    <td>{admin.created_at ? new Date(admin.created_at).toLocaleDateString() : "—"}</td>
+                    <td>{admin.created_at ? new Date(admin.created_at).toLocaleDateString() : "\u2014"}</td>
+                    <td>
+                      {canRevokeAdmin(admin, adminEmail, superAdminCount) && (
+                        <button
+                          className="btn btn-outline-danger btn-sm"
+                          type="button"
+                          onClick={() => openRevokeModal(admin)}
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -323,12 +390,50 @@ const AdminsPage = ({ adminRole }) => {
             )}
           </PortalModal>
         )}
+
+        {showRevokeModal && revokeTarget && (
+          <PortalModal
+            title="Revoke admin access"
+            onClose={() => { if (!isRevoking) setShowRevokeModal(false); }}
+            actions={
+              <>
+                <button
+                  className="btn btn-outline-secondary"
+                  type="button"
+                  disabled={isRevoking}
+                  onClick={() => setShowRevokeModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-danger"
+                  type="button"
+                  disabled={isRevoking}
+                  onClick={handleRevoke}
+                >
+                  {isRevoking ? "Revoking..." : "Revoke access"}
+                </button>
+              </>
+            }
+          >
+            <p>
+              Are you sure you want to revoke admin access for{" "}
+              <strong>{adminDisplayName(revokeTarget) || revokeTarget.email}</strong>
+              {adminDisplayName(revokeTarget) ? ` (${revokeTarget.email})` : ""}?
+            </p>
+            <p className="text-muted mb-0">
+              This action will be recorded in the audit log.
+            </p>
+            {revokeError && <div className="alert alert-danger mt-3">{revokeError}</div>}
+          </PortalModal>
+        )}
       </PortalShell>
     </div>
   );
 };
 
-export const getServerSideProps = async ({ req }) => requireSuperAdminSSR(req);
+export const getServerSideProps = async ({ req }) =>
+  requireSuperAdminSSR(req, (payload) => ({ adminEmail: payload.email }));
 
 AdminsPage.getLayout = function getLayout(page) {
   return <RootLayout>{page}</RootLayout>;
