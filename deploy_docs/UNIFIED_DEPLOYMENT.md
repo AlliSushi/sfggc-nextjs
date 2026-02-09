@@ -379,6 +379,91 @@ rm ~/htdocs/www.goldengateclassic.org/portal-app/.env.local
 ./deploy_scripts/deploy.sh --portal
 ```
 
+### Password Prompted Multiple Times During Deployment
+
+**Issue:**
+SSH password requested 3+ times during pre-flight checks even though you have SSH access
+
+**Cause:**
+SSH key authentication isn't configured, or deployment script isn't using your SSH alias
+
+**Solution:**
+
+1. **Complete SSH key setup:**
+   ```bash
+   ./deploy_scripts/setup-ssh.sh goldengateclassic@54.70.1.215 sfggc
+   ```
+
+2. **Verify passwordless SSH works with alias:**
+   ```bash
+   ssh sfggc "echo Connection successful"
+   ```
+
+3. **Create `.deployrc` to use SSH alias:**
+   ```bash
+   # Copy and edit to use your SSH alias
+   cp .deployrc.example .deployrc
+   # Change DEPLOY_SSH_HOST to your alias (e.g., "sfggc")
+   ```
+
+   In `.deployrc`:
+   ```bash
+   DEPLOY_SSH_HOST="sfggc"  # Use SSH alias instead of IP
+   ```
+
+### Node.js Not Found on Server (NVM Users)
+
+**Issue:**
+```
+⚠ Node.js not found on server (required for portal)
+```
+
+Even though `node --version` works when you SSH interactively
+
+**Cause:**
+NVM isn't loaded in non-interactive SSH sessions (used by deployment script)
+
+**Solution:**
+
+Add NVM initialization to the beginning of your `.bashrc` on the server:
+
+```bash
+# SSH to server
+ssh your-server
+
+# Add NVM init to top of .bashrc (before non-interactive check)
+cat > /tmp/fix_nvm.sh << 'EOF'
+#!/bin/bash
+if ! grep -q 'NVM initialization for non-interactive' ~/.bashrc; then
+  cat > /tmp/bashrc_new << 'INNEREOF'
+# NVM initialization for non-interactive shells (deployment, etc.)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+INNEREOF
+  cat ~/.bashrc >> /tmp/bashrc_new
+  mv /tmp/bashrc_new ~/.bashrc
+  echo "✓ NVM initialization added"
+else
+  echo "✓ Already configured"
+fi
+EOF
+bash /tmp/fix_nvm.sh
+```
+
+**Verify the fix:**
+```bash
+# Test from your local machine
+ssh your-server "node --version"
+# Should show Node.js version without errors
+```
+
+**Why this happens:**
+- NVM is typically loaded by `.bashrc` or `.bash_profile`
+- These files have a guard that returns early for non-interactive shells
+- Deployment scripts use non-interactive SSH, so NVM never loads
+- Solution: Add NVM initialization before the non-interactive guard
+
 ---
 
 ## Advanced Usage
