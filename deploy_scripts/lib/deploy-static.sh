@@ -187,13 +187,9 @@ deploy_static() {
 
   log_section "STATIC SITE DEPLOYMENT"
 
-  # Build if out/ doesn't exist
-  if [ ! -d "out" ]; then
-    log_info "Build output not found, building now..."
-    build_static
-  else
-    log_info "Using existing build output"
-  fi
+  # Always build fresh to ensure latest changes are deployed
+  log_info "Building static site..."
+  build_static
 
   # Create backup on server
   create_static_backup
