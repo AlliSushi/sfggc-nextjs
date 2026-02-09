@@ -505,8 +505,8 @@ test(
     );
     await db.pool.query(
       `
-      insert into admin_password_resets (admin_id, token, expires_at)
-      select id, ?, date_add(now(), interval 1 hour)
+      insert into admin_password_resets (id, admin_id, token, expires_at)
+      select uuid(), id, ?, date_add(now(), interval 1 hour)
       from admins where email = ?
       `,
       ["reset-token", "admin@example.com"]
@@ -540,8 +540,8 @@ test(
     );
     await db.pool.query(
       `
-      insert into admin_password_resets (admin_id, token, expires_at)
-      select id, ?, date_add(now(), interval 1 hour)
+      insert into admin_password_resets (id, admin_id, token, expires_at)
+      select uuid(), id, ?, date_add(now(), interval 1 hour)
       from admins where email = ?
       `,
       ["reset-token", "admin@example.com"]

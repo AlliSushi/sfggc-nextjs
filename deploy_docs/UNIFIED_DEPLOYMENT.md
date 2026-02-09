@@ -33,7 +33,13 @@ This guide covers the unified deployment system for the SFGGC Next.js project, w
 
 # 3. Deploy everything
 ./deploy_scripts/deploy.sh --all
+
+# 4. Non-interactive deployment (for CI/CD)
+export DEPLOY_DB_PASSWORD="secret" DEPLOY_SMTP_PASSWORD="secret"
+./deploy_scripts/deploy.sh --portal  # No prompts!
 ```
+
+**Note:** First-time portal deployments prompt for secrets (database password, SMTP password, admin account). See [Non-Interactive Mode](#non-interactive-mode-optional---for-automationci-cd) for automation via environment variables.
 
 ---
 
@@ -172,7 +178,7 @@ Deploys everything in sequence.
 
 The first time you deploy the portal, the script will prompt for sensitive information.
 
-### Interactive Prompts
+### Interactive Prompts (Default)
 
 ```
 Database Configuration:
@@ -187,6 +193,59 @@ No admin accounts found. Let's create a super admin.
   Admin email: admin@goldengateclassic.org
   Admin full name: Admin User
   Admin password: ********
+```
+
+### Non-Interactive Mode (Optional - For Automation/CI-CD)
+
+For automation or CI/CD pipelines, you can provide secrets via environment variables instead of interactive prompts:
+
+**Portal Environment Secrets:**
+```bash
+export DEPLOY_DB_PASSWORD="your-database-password"
+export DEPLOY_SMTP_PASSWORD="your-aws-ses-smtp-password"
+
+# Optional (auto-generated/defaulted if not provided):
+export DEPLOY_SESSION_SECRET="64-char-hex-string"  # Random if not set
+export DEPLOY_PORTAL_BASE_URL="https://your-domain"  # Defaults to $DEPLOY_DOMAIN
+```
+
+**Admin Account Creation:**
+```bash
+export DEPLOY_ADMIN_EMAIL="admin@goldengateclassic.org"
+export DEPLOY_ADMIN_NAME="Tournament Administrator"
+export DEPLOY_ADMIN_PASSWORD="SecurePassword123!"
+```
+
+**Example - Non-Interactive First Deployment:**
+```bash
+# Set secrets via environment variables
+export DEPLOY_DB_PASSWORD="prod-db-password"
+export DEPLOY_SMTP_PASSWORD="aws-ses-smtp-password"
+export DEPLOY_ADMIN_EMAIL="admin@goldengateclassic.org"
+export DEPLOY_ADMIN_NAME="John Doe"
+export DEPLOY_ADMIN_PASSWORD="AdminSecurePass!"
+
+# Deploy portal (no prompts!)
+./deploy_scripts/deploy.sh --portal
+```
+
+**How It Works:**
+- If environment variables are set, the script uses them silently
+- If not set, the script prompts interactively (default behavior)
+- Mix and match: set some via env vars, prompt for others
+- After first deployment, subsequent deployments don't need secrets (config/admins already exist)
+
+**CI/CD Example (GitHub Actions):**
+```yaml
+- name: Deploy Portal
+  env:
+    DEPLOY_DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+    DEPLOY_SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+    DEPLOY_ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+    DEPLOY_ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
+    DEPLOY_ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+  run: |
+    ./deploy_scripts/deploy.sh --portal
 ```
 
 ### What Gets Created

@@ -78,6 +78,7 @@ export default async function handler(req, res) {
 
     const passwordHash = await bcrypt.hash(initialPassword, BCRYPT_ROUNDS);
     const adminId = crypto.randomUUID();
+    const resetTokenId = crypto.randomUUID();
     const resetToken = generateSecureToken();
     await withTransaction(async (connQuery) => {
       await connQuery(
@@ -99,10 +100,10 @@ export default async function handler(req, res) {
       );
       await connQuery(
         `
-        insert into admin_password_resets (admin_id, token, expires_at)
-        values (?,?,?)
+        insert into admin_password_resets (id, admin_id, token, expires_at)
+        values (?,?,?,?)
         `,
-        [adminId, resetToken, new Date(Date.now() + ADMIN_PASSWORD_RESET_TTL_MS)]
+        [resetTokenId, adminId, resetToken, new Date(Date.now() + ADMIN_PASSWORD_RESET_TTL_MS)]
       );
     });
 

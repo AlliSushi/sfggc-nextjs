@@ -72,24 +72,43 @@ setup_portal_environment() {
   local DB_USER="${DEPLOY_DB_USER}"
   log_info "Database username: $DB_USER (from config)"
 
-  # Only prompt for password (secret)
-  read -sp "  Database password: " DB_PASS
-  echo ""
+  # Get database password (from env var or prompt)
+  local DB_PASS="${DEPLOY_DB_PASSWORD:-}"
+  if [ -z "$DB_PASS" ]; then
+    read -sp "  Database password: " DB_PASS
+    echo ""
+  else
+    log_info "Database password: (from DEPLOY_DB_PASSWORD env var)"
+  fi
 
   local PORTAL_DB_URL="mysql://${DB_USER}:${DB_PASS}@${DEPLOY_DB_HOST}:${DEPLOY_DB_PORT}/${DEPLOY_DB_NAME}"
 
-  # Generate session secret
-  local SESSION_SECRET=$(openssl rand -hex 32)
-  read -p "  Admin session secret [$SESSION_SECRET]: " SESSION_INPUT
-  SESSION_SECRET="${SESSION_INPUT:-$SESSION_SECRET}"
+  # Generate or use provided session secret
+  local SESSION_SECRET="${DEPLOY_SESSION_SECRET:-$(openssl rand -hex 32)}"
+  if [ -z "${DEPLOY_SESSION_SECRET:-}" ]; then
+    read -p "  Admin session secret [$SESSION_SECRET]: " SESSION_INPUT
+    SESSION_SECRET="${SESSION_INPUT:-$SESSION_SECRET}"
+  else
+    log_info "Session secret: (from DEPLOY_SESSION_SECRET env var)"
+  fi
 
-  # Prompt for SMTP password
-  read -sp "  SMTP password (AWS SES): " SMTP_PASS
-  echo ""
+  # Get SMTP password (from env var or prompt)
+  local SMTP_PASS="${DEPLOY_SMTP_PASSWORD:-}"
+  if [ -z "$SMTP_PASS" ]; then
+    read -sp "  SMTP password (AWS SES): " SMTP_PASS
+    echo ""
+  else
+    log_info "SMTP password: (from DEPLOY_SMTP_PASSWORD env var)"
+  fi
 
-  # Prompt for portal base URL
-  read -p "  Portal base URL [https://${DEPLOY_DOMAIN}]: " PORTAL_BASE_URL_INPUT
-  local PORTAL_BASE_URL="${PORTAL_BASE_URL_INPUT:-https://${DEPLOY_DOMAIN}}"
+  # Get portal base URL (from env var or prompt)
+  local PORTAL_BASE_URL="${DEPLOY_PORTAL_BASE_URL:-https://${DEPLOY_DOMAIN}}"
+  if [ -z "${DEPLOY_PORTAL_BASE_URL:-}" ]; then
+    read -p "  Portal base URL [$PORTAL_BASE_URL]: " PORTAL_BASE_URL_INPUT
+    PORTAL_BASE_URL="${PORTAL_BASE_URL_INPUT:-$PORTAL_BASE_URL}"
+  else
+    log_info "Portal base URL: $PORTAL_BASE_URL (from DEPLOY_PORTAL_BASE_URL env var)"
+  fi
 
   # Create .env.local on server
   log_step "Creating .env.local on server"
@@ -172,10 +191,29 @@ create_super_admin() {
     log_info "Creating super admin account"
     echo ""
 
-    read -p "  Admin email: " ADMIN_EMAIL
-    read -p "  Admin full name: " ADMIN_NAME
-    read -sp "  Admin password: " ADMIN_PASSWORD
-    echo ""
+    # Get admin credentials (from env vars or prompt)
+    local ADMIN_EMAIL="${DEPLOY_ADMIN_EMAIL:-}"
+    local ADMIN_NAME="${DEPLOY_ADMIN_NAME:-}"
+    local ADMIN_PASSWORD="${DEPLOY_ADMIN_PASSWORD:-}"
+
+    if [ -z "$ADMIN_EMAIL" ]; then
+      read -p "  Admin email: " ADMIN_EMAIL
+    else
+      log_info "Admin email: $ADMIN_EMAIL (from DEPLOY_ADMIN_EMAIL env var)"
+    fi
+
+    if [ -z "$ADMIN_NAME" ]; then
+      read -p "  Admin full name: " ADMIN_NAME
+    else
+      log_info "Admin name: $ADMIN_NAME (from DEPLOY_ADMIN_NAME env var)"
+    fi
+
+    if [ -z "$ADMIN_PASSWORD" ]; then
+      read -sp "  Admin password: " ADMIN_PASSWORD
+      echo ""
+    else
+      log_info "Admin password: (from DEPLOY_ADMIN_PASSWORD env var)"
+    fi
 
     ssh_command "cd ${DEPLOY_PORTAL_PATH} && \
       ADMIN_EMAIL='${ADMIN_EMAIL}' \

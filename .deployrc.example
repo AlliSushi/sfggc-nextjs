@@ -112,3 +112,33 @@ DEPLOY_SMTP_FROM="Golden Gate Classic <noreply@goldengateclassic.org>"
 #    - Stored in database 'admins' table (password hashed with bcrypt)
 #
 # All secrets remain on the server only - never stored in local config files.
+#
+# ============================================================================
+# Non-Interactive Deployment (Optional Environment Variables)
+# ============================================================================
+#
+# For automation or CI/CD, you can provide secrets via environment variables
+# instead of interactive prompts. Set these BEFORE running the deployment:
+#
+# First-time portal deployment secrets:
+#   export DEPLOY_DB_PASSWORD="your-database-password"
+#   export DEPLOY_SMTP_PASSWORD="your-smtp-password"
+#   export DEPLOY_SESSION_SECRET="64-char-hex-string"  # Optional, auto-generated if not set
+#   export DEPLOY_PORTAL_BASE_URL="https://your-domain"  # Optional, defaults to https://$DEPLOY_DOMAIN
+#
+# First-time admin account creation:
+#   export DEPLOY_ADMIN_EMAIL="admin@example.com"
+#   export DEPLOY_ADMIN_NAME="Admin Name"
+#   export DEPLOY_ADMIN_PASSWORD="secure-password"
+#
+# Example non-interactive first deployment:
+#   export DEPLOY_DB_PASSWORD="secretpass"
+#   export DEPLOY_SMTP_PASSWORD="smtppass"
+#   export DEPLOY_ADMIN_EMAIL="admin@goldengateclassic.org"
+#   export DEPLOY_ADMIN_NAME="Tournament Admin"
+#   export DEPLOY_ADMIN_PASSWORD="AdminPass123!"
+#   ./deploy_scripts/deploy.sh --portal
+#
+# If environment variables are not set, the script will prompt interactively.
+# After first deployment, subsequent deployments don't need these (config
+# exists on server).

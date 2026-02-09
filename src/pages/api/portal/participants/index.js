@@ -23,10 +23,12 @@ export default async function handler(req, res) {
         select p.pid, p.first_name, p.last_name, p.email, t.team_name
         from people p
         left join teams t on p.tnmt_id = t.tnmt_id
-        where lower(pid) like ?
-           or lower(email) like ?
-           or lower(concat(first_name, ' ', last_name)) like ?
-        order by last_name, first_name
+        left join admins a on p.pid = a.pid
+        where a.pid is null
+          and (lower(p.pid) like ?
+           or lower(p.email) like ?
+           or lower(concat(p.first_name, ' ', p.last_name)) like ?)
+        order by p.last_name, p.first_name
         `,
         [`%${search}%`, `%${search}%`, `%${search}%`]
       );
@@ -38,7 +40,9 @@ export default async function handler(req, res) {
           select p.pid, p.first_name, p.last_name, p.email, t.team_name
           from people p
           left join teams t on p.tnmt_id = t.tnmt_id
-          order by last_name, first_name
+          left join admins a on p.pid = a.pid
+          where a.pid is null
+          order by p.last_name, p.first_name
           limit 200
           `
         )
