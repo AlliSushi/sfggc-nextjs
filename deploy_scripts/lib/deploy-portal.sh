@@ -231,7 +231,7 @@ validate_server_config() {
   local has_export=$(ssh_command "cd ${DEPLOY_PORTAL_PATH} && grep -c \"output.*['\\\"]export['\\\"]\" next.config.js 2>/dev/null || echo 0")
 
   if [ "$has_export" != "0" ]; then
-    log_error "Server config has 'output: export' - portal requires server mode"
+    log_info "Server config has 'output: export' - portal requires server mode"
     log_info "Fixing server configuration..."
 
     # Create server-mode config on server
