@@ -18,6 +18,8 @@ if [[ -z "${ADMIN_EMAIL:-}" ]]; then
   exit 1
 fi
 
+# If ADMIN_NAME is not provided, default to email prefix (part before @)
+# This is a fallback for when name is not provided via deployment or manual invocation
 if [[ -z "${ADMIN_NAME:-}" ]]; then
   ADMIN_NAME="${ADMIN_EMAIL%@*}"
 fi

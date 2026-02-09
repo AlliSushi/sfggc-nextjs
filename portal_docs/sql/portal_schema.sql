@@ -22,6 +22,7 @@ create table if not exists people (
   pid varchar(64) primary key,
   first_name text not null,
   last_name text not null,
+  nickname text,
   email text,
   phone text,
   birth_month int,

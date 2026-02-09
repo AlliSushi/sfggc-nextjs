@@ -2,9 +2,9 @@ import { randomUUID } from "crypto";
 import { query as defaultQuery } from "./db.js";
 import { filterNonNull } from "./array-helpers.js";
 import { toTeamSlug } from "./slug.js";
-
-const buildFullName = (person) =>
-  `${person.first_name || ""} ${person.last_name || ""}`.trim();
+import { calculateHandicap } from "./handicap-constants.js";
+import { buildFullName } from "./name-helpers.js";
+import { EVENT_TYPE_LIST, EVENT_TYPES } from "./event-constants.js";
 
 const resolvePartner = async (pid, doubles, person, query = defaultQuery) => {
   if (doubles?.partner_pid) {
@@ -17,7 +17,7 @@ const resolvePartner = async (pid, doubles, person, query = defaultQuery) => {
   if (doubles?.partner_first_name && doubles?.partner_last_name) {
     const result = await query(
       `
-      select pid, first_name, last_name
+      select pid, first_name, last_name, nickname
       from people
       where lower(first_name) = lower(?)
         and lower(last_name) = lower(?)
@@ -31,7 +31,7 @@ const resolvePartner = async (pid, doubles, person, query = defaultQuery) => {
 
   if (person.did) {
     const result = await query(
-      "select pid, first_name, last_name from people where did = ? and pid <> ? limit 1",
+      "select pid, first_name, last_name, nickname from people where did = ? and pid <> ? limit 1",
       [person.did, pid]
     );
     return result.rows[0] || null;
@@ -73,10 +73,17 @@ const formatParticipant = async (pid, query = defaultQuery) => {
   const scoreIndex = new Map(scoreRows.map((row) => [row.event_type, row]));
   const scoreFor = (eventType) => scoreIndex.get(eventType) || {};
 
+  const bookAverage =
+    scoreFor(EVENT_TYPES.TEAM).entering_avg ??
+    scoreFor(EVENT_TYPES.DOUBLES).entering_avg ??
+    scoreFor(EVENT_TYPES.SINGLES).entering_avg ??
+    null;
+
   return {
     pid: person.pid,
     firstName: person.first_name,
     lastName: person.last_name,
+    nickname: person.nickname,
     email: person.email,
     phone: person.phone,
     birthMonth: person.birth_month,
@@ -84,6 +91,7 @@ const formatParticipant = async (pid, query = defaultQuery) => {
     city: person.city,
     region: person.region,
     country: person.country,
+    bookAverage: bookAverage,
     team: {
       tnmtId: person.tnmt_id,
       name: team?.team_name || "",
@@ -95,37 +103,33 @@ const formatParticipant = async (pid, query = defaultQuery) => {
       partnerName: buildPartnerName(partner, doubles),
     },
     lanes: {
-      team: scoreFor("team").lane || "",
-      doubles: scoreFor("doubles").lane || "",
-      singles: scoreFor("singles").lane || "",
+      team: scoreFor(EVENT_TYPES.TEAM).lane || "",
+      doubles: scoreFor(EVENT_TYPES.DOUBLES).lane || "",
+      singles: scoreFor(EVENT_TYPES.SINGLES).lane || "",
     },
     averages: {
-      entering:
-        scoreFor("team").entering_avg ??
-        scoreFor("doubles").entering_avg ??
-        scoreFor("singles").entering_avg ??
-        null,
+      entering: bookAverage,
       handicap:
-        scoreFor("team").handicap ??
-        scoreFor("doubles").handicap ??
-        scoreFor("singles").handicap ??
+        scoreFor(EVENT_TYPES.TEAM).handicap ??
+        scoreFor(EVENT_TYPES.DOUBLES).handicap ??
+        scoreFor(EVENT_TYPES.SINGLES).handicap ??
         null,
     },
     scores: {
       team: filterNonNull([
-        scoreFor("team").game1,
-        scoreFor("team").game2,
-        scoreFor("team").game3,
+        scoreFor(EVENT_TYPES.TEAM).game1,
+        scoreFor(EVENT_TYPES.TEAM).game2,
+        scoreFor(EVENT_TYPES.TEAM).game3,
       ]),
       doubles: filterNonNull([
-        scoreFor("doubles").game1,
-        scoreFor("doubles").game2,
-        scoreFor("doubles").game3,
+        scoreFor(EVENT_TYPES.DOUBLES).game1,
+        scoreFor(EVENT_TYPES.DOUBLES).game2,
+        scoreFor(EVENT_TYPES.DOUBLES).game3,
       ]),
       singles: filterNonNull([
-        scoreFor("singles").game1,
-        scoreFor("singles").game2,
-        scoreFor("singles").game3,
+        scoreFor(EVENT_TYPES.SINGLES).game1,
+        scoreFor(EVENT_TYPES.SINGLES).game2,
+        scoreFor(EVENT_TYPES.SINGLES).game3,
       ]),
     },
   };
@@ -135,13 +139,14 @@ const upsertPerson = async (pid, updates, query = defaultQuery) => {
   await query(
     `
     insert into people (
-      pid, first_name, last_name, email, phone, birth_month, birth_day,
+      pid, first_name, last_name, nickname, email, phone, birth_month, birth_day,
       city, region, country, tnmt_id, did, updated_at
     )
-    values (?,?,?,?,?,?,?,?,?,?,?, ?, now())
+    values (?,?,?,?,?,?,?,?,?,?,?,?, ?, now())
     on duplicate key update
       first_name = values(first_name),
       last_name = values(last_name),
+      nickname = values(nickname),
       email = values(email),
       phone = values(phone),
       birth_month = values(birth_month),
@@ -157,6 +162,7 @@ const upsertPerson = async (pid, updates, query = defaultQuery) => {
       pid,
       updates.firstName,
       updates.lastName,
+      updates.nickname,
       updates.email,
       updates.phone,
       updates.birthMonth,
@@ -200,13 +206,12 @@ const upsertDoublesPair = async (pid, doubles, query = defaultQuery) => {
   );
 };
 
-const EVENT_TYPES = ["team", "doubles", "singles"];
-
 const upsertScores = async (pid, updates, query = defaultQuery) => {
-  const avg = updates.averages?.entering ?? null;
-  const handicap = updates.averages?.handicap ?? null;
+  const avg = updates.bookAverage ?? updates.averages?.entering ?? null;
+  // Handicap is always calculated from book average, never taken from updates
+  const handicap = calculateHandicap(avg);
 
-  for (const eventType of EVENT_TYPES) {
+  for (const eventType of EVENT_TYPE_LIST) {
     const lane = updates.lanes?.[eventType] || null;
     const games = updates.scores?.[eventType] || [];
 
@@ -257,6 +262,7 @@ const buildChanges = (current, updates) => {
 
   addChange("first_name", current.firstName, updates.firstName);
   addChange("last_name", current.lastName, updates.lastName);
+  addChange("nickname", current.nickname, updates.nickname);
   addChange("email", current.email, updates.email);
   addChange("phone", current.phone, updates.phone);
   addChange("birth_month", current.birthMonth, updates.birthMonth);
@@ -264,6 +270,7 @@ const buildChanges = (current, updates) => {
   addChange("city", current.city, updates.city);
   addChange("region", current.region, updates.region);
   addChange("country", current.country, updates.country);
+  addChange("book_average", current.bookAverage, updates.bookAverage);
   addChange("team_name", current.team?.name, updates.team?.name);
   addChange("team_id", current.team?.tnmtId, updates.team?.tnmtId);
   addChange("doubles_id", current.doubles?.did, updates.doubles?.did);

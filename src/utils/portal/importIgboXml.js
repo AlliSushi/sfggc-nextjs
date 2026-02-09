@@ -5,6 +5,8 @@ import { fileURLToPath } from "url";
 import { XMLParser } from "fast-xml-parser";
 import { withTransaction } from "./db.js";
 import { toTeamSlug } from "./slug.js";
+import { calculateHandicap } from "./handicap-constants.js";
+import { EVENT_TYPE_LIST } from "./event-constants.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -85,6 +87,7 @@ const buildImportRows = (people) => {
 
     const firstName = toText(person.FIRST_NAME);
     const lastName = toText(person.LAST_NAME);
+    const nickname = sanitizePhone(person.NICKNAME);
     const email = toText(person.EMAIL);
     const phone = sanitizePhone(person.PHONE_1 || person.PHONE);
     const birthMonth = toNumber(person.BIRTH_MONTH);
@@ -100,7 +103,7 @@ const buildImportRows = (people) => {
     const doublesId = toText(person.DOUBLES_EXTERNAL_ID);
     const doublesFirstName = toText(person.DOUBLES_FIRST_NAME);
     const doublesLastName = toText(person.DOUBLES_LAST_NAME);
-    const bookAvg = toNumber(person.BOOK_AVERAGE);
+    const bookAvg = toNumber(person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE);
 
     if (teamId && teamName) {
       teams.set(teamId, {
@@ -128,6 +131,7 @@ const buildImportRows = (people) => {
       pid,
       first_name: firstName,
       last_name: lastName,
+      nickname,
       email,
       phone,
       birth_month: birthMonth,
@@ -142,7 +146,8 @@ const buildImportRows = (people) => {
     });
 
     if (bookAvg !== null) {
-      ["team", "doubles", "singles"].forEach((eventType) => {
+      const handicap = calculateHandicap(bookAvg);
+      EVENT_TYPE_LIST.forEach((eventType) => {
         scores.push({
           pid,
           event_type: eventType,
@@ -151,7 +156,7 @@ const buildImportRows = (people) => {
           game2: null,
           game3: null,
           entering_avg: bookAvg,
-          handicap: null,
+          handicap: handicap,
         });
       });
     }
@@ -179,6 +184,7 @@ const importIgboXml = async (xmlText) => {
     await query(
       `
       alter table people
+        add column if not exists nickname text,
         add column if not exists team_captain boolean default false,
         add column if not exists team_order int
       `
@@ -232,13 +238,14 @@ const importIgboXml = async (xmlText) => {
       await query(
         `
         insert into people (
-          pid, first_name, last_name, email, phone, birth_month, birth_day,
+          pid, first_name, last_name, nickname, email, phone, birth_month, birth_day,
           city, region, country, tnmt_id, did, team_captain, team_order, updated_at
         )
-        values (?,?,?,?,?,?,?,?,?,?,?,?,?, ?, now())
+        values (?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?, now())
         on duplicate key update
           first_name = values(first_name),
           last_name = values(last_name),
+          nickname = values(nickname),
           email = values(email),
           phone = values(phone),
           birth_month = values(birth_month),
@@ -256,6 +263,7 @@ const importIgboXml = async (xmlText) => {
           person.pid,
           person.first_name,
           person.last_name,
+          person.nickname,
           person.email,
           person.phone,
           person.birth_month,
