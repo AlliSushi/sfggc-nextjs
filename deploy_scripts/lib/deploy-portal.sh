@@ -13,6 +13,13 @@ sync_portal_files() {
     return 0
   fi
 
+  # Show current local config status
+  if check_config_is_server_mode "next.config.js"; then
+    log_info "Local config: server mode (correct for portal)"
+  else
+    log_warn "Local config: export mode (will be fixed on server)"
+  fi
+
   # Create remote directory
   ssh_command "mkdir -p ${DEPLOY_PORTAL_PATH}"
 
@@ -210,15 +217,67 @@ install_portal_dependencies() {
   return 0
 }
 
+# validate_server_config - Ensure server has correct config before building
+validate_server_config() {
+  log_step "Validating server configuration"
+
+  if [ "${DRY_RUN:-false}" = true ]; then
+    log_dry_run "Would check next.config.js on server"
+    log_dry_run "Would verify no 'output: export' in config"
+    return 0
+  fi
+
+  # Check if config has export mode (would break portal)
+  local has_export=$(ssh_command "cd ${DEPLOY_PORTAL_PATH} && grep -c \"output.*['\\\"]export['\\\"]\" next.config.js 2>/dev/null || echo 0")
+
+  if [ "$has_export" != "0" ]; then
+    log_error "Server config has 'output: export' - portal requires server mode"
+    log_info "Fixing server configuration..."
+
+    # Create server-mode config on server
+    ssh_command "cd ${DEPLOY_PORTAL_PATH} && cat > next.config.js << 'EOF'
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    unoptimized: true
+  }
+}
+
+module.exports = nextConfig
+EOF"
+
+    if [ $? -eq 0 ]; then
+      log_success "Server config fixed: server mode enabled"
+    else
+      log_error "Failed to fix server config"
+      return 1
+    fi
+  else
+    log_success "Server config validated: server mode active"
+  fi
+
+  return 0
+}
+
 # build_portal_on_server - Build Next.js application on server
 build_portal_on_server() {
   log_step "Building Next.js application on server"
 
   if [ "${DRY_RUN:-false}" = true ]; then
+    log_dry_run "Would validate server config"
     log_dry_run "Would run: npm run build"
     return 0
   fi
 
+  # CRITICAL: Always validate config before building
+  # Files may have been synced with wrong config from local machine
+  validate_server_config || return 1
+
+  # Remove old build to force fresh build with correct config
+  log_info "Removing old build directory..."
+  ssh_command "cd ${DEPLOY_PORTAL_PATH} && rm -rf .next"
+
+  log_info "Running build with validated config..."
   ssh_command "cd ${DEPLOY_PORTAL_PATH} && npm run build 2>&1 | tail -5"
 
   if [ $? -eq 0 ]; then

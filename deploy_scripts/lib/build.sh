@@ -14,9 +14,14 @@ backup_next_config() {
 # restore_next_config - Restore original next.config.js
 restore_next_config() {
   if [ -f "next.config.js.backup" ]; then
+    log_info "Restoring config: export mode -> server mode"
     mv next.config.js.backup next.config.js
-    if [ "${DEBUG:-false}" = true ]; then
-      log_info "Restored next.config.js"
+
+    # Verify restoration
+    if check_config_is_server_mode "next.config.js"; then
+      log_success "Config restored: server mode active"
+    else
+      log_warn "Config restored but may not be in server mode"
     fi
   fi
 }
@@ -29,6 +34,8 @@ configure_static_build() {
     log_dry_run "Would set output: 'export' in next.config.js"
     return 0
   fi
+
+  log_info "Switching config: server mode -> export mode"
 
   # Create static-mode config (excludes /portal routes)
   cat > next.config.js << 'EOF'
@@ -54,7 +61,7 @@ const nextConfig = {
 module.exports = nextConfig
 EOF
 
-  log_success "Configured for static export"
+  log_success "Config set: export mode enabled"
 }
 
 # build_static - Build static site
@@ -192,6 +199,65 @@ validate_next_build() {
   fi
 
   log_success "Build output validated"
+  return 0
+}
+
+# check_config_has_export_mode - Verify config contains output: 'export'
+check_config_has_export_mode() {
+  local config_file="${1:-next.config.js}"
+
+  if [ ! -f "$config_file" ]; then
+    return 1
+  fi
+
+  grep -q "output.*['\"]export['\"]" "$config_file"
+  return $?
+}
+
+# check_config_is_server_mode - Verify config does NOT have output: 'export'
+check_config_is_server_mode() {
+  local config_file="${1:-next.config.js}"
+
+  if [ ! -f "$config_file" ]; then
+    return 1
+  fi
+
+  if grep -q "output.*['\"]export['\"]" "$config_file"; then
+    return 1  # Found export mode, NOT server mode
+  fi
+
+  return 0  # Server mode (no export)
+}
+
+# ensure_server_mode_config - Ensure next.config.js is in server mode
+ensure_server_mode_config() {
+  if [ "${DRY_RUN:-false}" = true ]; then
+    log_dry_run "Would verify server-mode config"
+    return 0
+  fi
+
+  if ! check_config_is_server_mode "next.config.js"; then
+    log_warn "Config has 'output: export' but portal requires server mode"
+    log_info "Creating server-mode config..."
+
+    backup_next_config
+
+    cat > next.config.js << 'EOF'
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    unoptimized: true
+  }
+}
+
+module.exports = nextConfig
+EOF
+
+    log_success "Server-mode config created"
+    return 0
+  fi
+
+  log_info "Config is already in server mode"
   return 0
 }
 

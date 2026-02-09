@@ -244,6 +244,24 @@ main() {
       ;;
     all)
       deploy_static || exit 1
+
+      # CRITICAL: Ensure config is restored to server mode before portal deployment
+      # Static build temporarily changes next.config.js to export mode, then restores it.
+      # We must verify restoration completed before syncing files for portal.
+      log_step "Verifying server-mode config before portal deployment"
+      if ! check_config_is_server_mode "next.config.js"; then
+        log_error "Config still has 'output: export' after static build"
+        log_error "This would break portal deployment. Restoring now..."
+        restore_next_config
+
+        # Verify restoration worked
+        if ! check_config_is_server_mode "next.config.js"; then
+          log_error "Failed to restore server-mode config"
+          exit 1
+        fi
+      fi
+      log_success "Config verified: server mode active"
+
       echo ""
       deploy_portal || exit 1
       ;;
