@@ -1,6 +1,10 @@
 #!/bin/bash
 # deploy-portal.sh - Portal application deployment logic
 
+# Source migrations library
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/deploy-migrations.sh"
+
 # sync_portal_files - Upload portal application files to server
 sync_portal_files() {
   log_step "Syncing portal application files"
@@ -43,17 +47,25 @@ sync_portal_files() {
   return 0
 }
 
-# setup_portal_environment - Create .env.local on server (first-time only)
+# setup_portal_environment - Create .env.local on server (first-time only, or with --setup flag)
 setup_portal_environment() {
   log_step "Checking portal environment configuration"
 
-  # Check if .env.local already exists
+  # Check if .env.local already exists (skip check if --setup flag is set)
   if check_remote_file_exists "${DEPLOY_PORTAL_PATH}/.env.local"; then
-    log_info "Environment already configured"
-    return 0
+    if [ "${FORCE_SETUP:-false}" = true ]; then
+      log_warn "Existing .env.local found, but --setup flag forces reconfiguration"
+    else
+      log_info "Environment already configured"
+      return 0
+    fi
   fi
 
-  log_warn "First-time portal deployment detected"
+  if [ "${FORCE_SETUP:-false}" = true ]; then
+    log_warn "Environment reconfiguration requested (--setup flag)"
+  else
+    log_warn "First-time portal deployment detected"
+  fi
   log_info "Interactive setup required for secrets"
   echo ""
 
@@ -215,10 +227,16 @@ create_super_admin() {
       log_info "Admin password: (from DEPLOY_ADMIN_PASSWORD env var)"
     fi
 
+    # Escape credentials for safe passing through SSH
+    # This handles spaces, quotes, and special characters in admin names
+    local ESCAPED_EMAIL=$(printf '%q' "${ADMIN_EMAIL}")
+    local ESCAPED_NAME=$(printf '%q' "${ADMIN_NAME}")
+    local ESCAPED_PASSWORD=$(printf '%q' "${ADMIN_PASSWORD}")
+
     ssh_command "cd ${DEPLOY_PORTAL_PATH} && \
-      ADMIN_EMAIL='${ADMIN_EMAIL}' \
-      ADMIN_NAME='${ADMIN_NAME}' \
-      ADMIN_PASSWORD='${ADMIN_PASSWORD}' \
+      ADMIN_EMAIL=${ESCAPED_EMAIL} \
+      ADMIN_NAME=${ESCAPED_NAME} \
+      ADMIN_PASSWORD=${ESCAPED_PASSWORD} \
       bash backend/scripts/admin/create-super-admin.sh 2>&1"
 
     if [ $? -eq 0 ]; then
@@ -440,6 +458,13 @@ deploy_portal() {
 
   # Initialize database
   initialize_database
+
+  # Run database migrations
+  if check_migration_safety; then
+    run_migrations || {
+      log_warn "Some migrations failed, but continuing deployment"
+    }
+  fi
 
   # Create super admin (first-time only)
   create_super_admin || {

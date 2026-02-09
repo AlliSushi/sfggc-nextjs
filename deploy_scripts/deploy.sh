@@ -18,6 +18,8 @@
 #   --user USER       Override SSH user
 #   --path PATH       Override deployment path
 #   --force           Skip confirmation prompts
+#   --setup           Force environment reconfiguration (recreates .env.local)
+#   --skip-migrations Skip database migrations (not recommended)
 #   -h, --help        Show this help
 #
 # Examples:
@@ -35,6 +37,9 @@
 #
 #   # Dry run with details
 #   ./deploy_scripts/deploy.sh --all --dry-run --verbose
+#
+#   # Force environment reconfiguration (recover from broken .env.local)
+#   ./deploy_scripts/deploy.sh --portal --setup
 
 set -euo pipefail
 
@@ -61,6 +66,8 @@ DRY_RUN=false
 VERBOSE=false
 DEBUG=false
 FORCE=false
+FORCE_SETUP=false
+SKIP_MIGRATIONS=false
 CONFIG_FILE=".deployrc"
 
 CLI_SSH_HOST=""
@@ -88,6 +95,7 @@ Options:
   --server HOST     Override SSH host
   --user USER       Override SSH user
   --force           Skip confirmation prompts
+  --setup           Force environment reconfiguration (recreates .env.local)
   -h, --help        Show this help
 
 Examples:
@@ -105,6 +113,9 @@ Examples:
 
   # Dry run with details
   ./deploy_scripts/deploy.sh --all --dry-run --verbose
+
+  # Force environment reconfiguration (recover from broken .env.local)
+  ./deploy_scripts/deploy.sh --portal --setup
 
 Configuration:
   Create .deployrc from .deployrc.example for default settings:
@@ -163,6 +174,14 @@ parse_arguments() {
         FORCE=true
         shift
         ;;
+      --setup)
+        FORCE_SETUP=true
+        shift
+        ;;
+      --skip-migrations)
+        SKIP_MIGRATIONS=true
+        shift
+        ;;
       -h|--help)
         show_help
         exit 0
@@ -177,7 +196,7 @@ parse_arguments() {
   done
 
   # Export for use in sourced scripts
-  export DRY_RUN VERBOSE DEBUG FORCE
+  export DRY_RUN VERBOSE DEBUG FORCE FORCE_SETUP SKIP_MIGRATIONS
 }
 
 # ─── Determine deployment mode ───────────────────────────────────────────────

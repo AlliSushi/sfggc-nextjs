@@ -626,3 +626,112 @@ test(
     );
   }
 );
+
+// ─── --setup Flag Tests ──────────────────────────────────────────────────────
+
+test(
+  "Given deploy.sh, when checking argument parsing, then --setup flag sets FORCE_SETUP to true",
+  () => {
+    const content = readFile("deploy_scripts/deploy.sh");
+
+    // Default value is false
+    assert.ok(
+      content.includes("FORCE_SETUP=false"),
+      "deploy.sh must initialize FORCE_SETUP to false"
+    );
+
+    // Parses --setup flag
+    assert.ok(
+      content.includes("--setup)") &&
+      content.includes("FORCE_SETUP=true"),
+      "deploy.sh must set FORCE_SETUP=true when --setup flag is provided"
+    );
+
+    // Exports FORCE_SETUP for use in sourced scripts
+    assert.ok(
+      content.includes("export") && content.includes("FORCE_SETUP"),
+      "deploy.sh must export FORCE_SETUP for use in deploy-portal.sh"
+    );
+  }
+);
+
+test(
+  "Given deploy.sh help text, when checking --setup documentation, then it explains the flag forces environment reconfiguration",
+  () => {
+    const content = readFile("deploy_scripts/deploy.sh");
+
+    // Help text includes --setup flag
+    assert.ok(
+      content.includes("--setup"),
+      "deploy.sh help must document --setup flag"
+    );
+
+    // Explains it recreates .env.local
+    assert.ok(
+      content.includes("--setup") &&
+      (content.includes(".env.local") || content.includes("environment") || content.includes("reconfiguration")),
+      "deploy.sh help must explain --setup recreates environment configuration"
+    );
+
+    // Includes example usage
+    const exampleMatch = content.match(/# .*--setup/);
+    assert.ok(
+      exampleMatch,
+      "deploy.sh help must include example of using --setup flag"
+    );
+  }
+);
+
+test(
+  "Given setup_portal_environment function, when FORCE_SETUP is true and .env.local exists, then it proceeds with reconfiguration instead of returning early",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+
+    // Function checks if .env.local exists
+    assert.ok(
+      content.includes("check_remote_file_exists") &&
+      content.includes(".env.local"),
+      "setup_portal_environment must check if .env.local exists"
+    );
+
+    // Checks FORCE_SETUP flag
+    assert.ok(
+      content.includes("FORCE_SETUP"),
+      "setup_portal_environment must check FORCE_SETUP flag"
+    );
+
+    // When FORCE_SETUP is true, bypasses early return
+    assert.ok(
+      content.includes('[ "${FORCE_SETUP:-false}" = true ]'),
+      "setup_portal_environment must check FORCE_SETUP flag value"
+    );
+
+    // Shows warning when forcing reconfiguration
+    assert.ok(
+      content.includes("--setup flag forces reconfiguration") ||
+      (content.includes("--setup") && content.includes("forces")),
+      "setup_portal_environment must warn when --setup forces reconfiguration"
+    );
+  }
+);
+
+test(
+  "Given setup_portal_environment function, when FORCE_SETUP is false and .env.local exists, then it returns early without prompting",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+
+    // Has early return path when .env.local exists and FORCE_SETUP is false
+    assert.ok(
+      content.includes("Environment already configured") &&
+      content.includes("return 0"),
+      "setup_portal_environment must return early when .env.local exists and FORCE_SETUP is false"
+    );
+
+    // The else clause of FORCE_SETUP check contains the early return
+    assert.ok(
+      content.includes("else") &&
+      content.includes("Environment already configured"),
+      "setup_portal_environment must have else branch that returns early"
+    );
+  }
+);
