@@ -171,7 +171,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 - `people` - Participant records (PID from IGBO, demographics, team/doubles references)
 - `teams` - Tournament teams (tnmt_id, team_name, slug)
 - `doubles_pairs` - Doubles partnerships (did, pid, partner_pid)
-- `scores` - Game scores (pid + event_type: team/doubles/singles, 3 games each)
+- `scores` - Game scores (pid + event_type: team/doubles/singles, 3 games each, book average, auto-calculated handicap)
 - `admins` - Admin users (UUID, email, password_hash, role, optional PID link)
 - `audit_logs` - Change tracking (admin, participant, field, old_value, new_value)
 - `participant_login_tokens` - Single-use magic link tokens (30-min expiry)
@@ -180,11 +180,29 @@ There is **no separate backend server**. The "backend" is implemented via:
 **Key Patterns:**
 - **Import-first:** IGBO XML imports populate database via `importIgboXml.js`
 - **Upsert:** Import scripts update existing records or insert new ones (idempotent)
+- **Unique constraints:** `scores(pid, event_type)` ensures one record per participant per event, enables ON DUPLICATE KEY UPDATE
+- **Auto-calculation:** Handicap = floor((225 - bookAverage) * 0.9), calculated automatically, never manually editable
 - **Audit logging:** All admin edits tracked with before/after values
 - **Transactions:** Multi-step operations (imports, updates with audit) use database transactions
 - **Connection:** Auto-detects Unix socket (macOS Homebrew) or TCP, configured via `PORTAL_DATABASE_URL`
 
 **Schema Location:** `portal_docs/sql/portal_schema.sql`
+
+**Critical Database Patterns:**
+
+| Pattern | Rule | Example |
+|---|---|---|
+| **ON DUPLICATE KEY UPDATE** | Requires unique constraint on conflict fields | `scores(pid, event_type)` needs unique index for per-participant updates |
+| **Calculated fields** | Never store manually editable calculated values | Handicap = `Math.floor((225 - avg) * 0.9)` calculated in `upsertScores`, not UI |
+| **XML attribute parsing** | fast-xml-parser stores attributes as `{'#text': value, '@_attr': attrValue}` | `person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE` |
+| **Database migrations** | Must be idempotent, check existence before applying | Query `information_schema` before ALTER, clean duplicates before adding constraints |
+
+**Migration Requirements:**
+- Executable script in `backend/scripts/migrations/`
+- Idempotent checks (exits early if already applied)
+- Unix socket detection for localhost, TCP fallback
+- BDD test in `tests/unit/migrations/` verifying existence, executability, idempotency
+- See `deploy_docs/MIGRATIONS.md` for template
 
 ### Component Conventions
 
@@ -261,10 +279,16 @@ Most components are sections with:
 - `src/utils/portal/session.js` - Authentication and session tokens
 - `src/utils/portal/auth-guards.js` - Request authentication middleware
 - `src/utils/portal/audit.js` - Audit log writing
-- `src/utils/portal/importIgboXml.js` - XML import parser
+- `src/utils/portal/importIgboXml.js` - XML import parser (handles BOOK_AVERAGE attributes, extracts #text property)
+- `src/utils/portal/participant-db.js` - Participant data access, handicap auto-calculation in upsertScores()
 - `src/pages/api/portal/participants/[pid].js` - Participant CRUD API
 - `src/pages/api/portal/admin/login.js` - Admin authentication
 - `src/pages/api/portal/admin/import-xml.js` - XML import endpoint
+
+**Database Migrations:**
+- `backend/scripts/migrations/add-scores-unique-constraint.sh` - Adds unique index on scores(pid, event_type)
+- All migrations run automatically during portal deployment
+- See `deploy_docs/MIGRATIONS.md` for migration system details
 
 **Documentation:**
 - `portal_docs/portal_architecture.md` - Complete portal architecture
@@ -297,10 +321,13 @@ The database connection automatically handles:
 
 1. Admin uploads IGBO registration XML via admin dashboard
 2. `POST /api/portal/admin/import-xml` receives multipart form data
-3. Parser (`importIgboXml.js`) extracts people, teams, doubles pairs, scores
-4. Transaction-wrapped upsert to database (preserves IGBO IDs)
-5. Links existing admins to imported participants by email/phone
-6. Returns import summary
+3. Parser (`importIgboXml.js`) extracts people, teams, doubles pairs, scores, book averages
+4. Parser handles XML attributes: `person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE`
+5. Transaction-wrapped upsert to database (preserves IGBO IDs)
+6. Handicap auto-calculated from book average: `floor((225 - bookAverage) * 0.9)`
+7. Unique constraint `scores(pid, event_type)` ensures idempotent updates
+8. Links existing admins to imported participants by email/phone
+9. Returns import summary
 
 ### Authentication Flow
 

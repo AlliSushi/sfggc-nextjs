@@ -152,9 +152,75 @@ create table if not exists admin_password_resets (
 
 Schema file: `portal_docs/sql/portal_schema.sql`
 
+## Scores Table: Book Average and Handicap
+
+### Overview
+
+The `scores` table stores both game scores and bowling averages for participants:
+
+- **entering_avg** (book average): The participant's official USBC book average, imported from IGBO XML or manually entered by admins
+- **handicap**: Automatically calculated from book average using the formula `floor((225 - bookAverage) * 0.9)`
+
+### Unique Constraint Requirement
+
+The `scores` table has a unique constraint on `(pid, event_type)` to ensure each participant has exactly one score record per event type (team, doubles, singles).
+
+**Why this matters:**
+- Without the unique constraint, `INSERT ... ON DUPLICATE KEY UPDATE` creates new records instead of updating existing ones
+- This causes duplicate score records to accumulate with each XML import
+- The unique constraint enables idempotent imports (safe to run multiple times)
+
+**Migration script:** `backend/scripts/migrations/add-scores-unique-constraint.sh`
+
+The migration:
+1. Removes any existing duplicate records (keeping the most recent)
+2. Adds unique index `pid_event_unique` on `(pid, event_type)`
+3. Runs automatically during portal deployment via `deploy_scripts/lib/deploy-portal.sh`
+
+See [MIGRATIONS.md](../deploy_docs/MIGRATIONS.md) for details on the migration system.
+
+### Handicap Calculation
+
+**Formula:** `handicap = floor((225 - bookAverage) * 0.9)`
+
+**Where calculated:**
+- **XML Import** (`src/utils/portal/importIgboXml.js`): Extracts book average from XML, stores in database
+- **Participant Edit** (`src/utils/portal/participant-db.js`): Auto-calculates when admin updates book average
+- **Never editable:** Handicap input was removed from edit forms to prevent incorrect manual values
+
+**Example calculations:**
+- Book average 170 → Handicap = floor((225 - 170) * 0.9) = floor(49.5) = 49
+- Book average 200 → Handicap = floor((225 - 200) * 0.9) = floor(22.5) = 22
+- Book average 225 → Handicap = floor((225 - 225) * 0.9) = 0
+
+### XML Import: Handling Attributes
+
+IGBO XML includes attributes on the `BOOK_AVERAGE` element:
+
+```xml
+<BOOK_AVERAGE verified="YES">170</BOOK_AVERAGE>
+```
+
+The `fast-xml-parser` library converts this to an object:
+
+```javascript
+{
+  '#text': 170,
+  '@_verified': 'YES'
+}
+```
+
+**Import fix** (`src/utils/portal/importIgboXml.js` line 104):
+```javascript
+const bookAvg = toNumber(person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE);
+```
+
+This handles both attribute-based and simple text content.
+
 ## Indexing (initial)
 
 - `people.email`, `people.phone`
 - `people.last_name`, `people.first_name`
 - `scores.pid`, `scores.event_id`
+- `scores(pid, event_type)` - unique constraint for upserts
 - `audit_logs.admin_id`, `audit_logs.created_at`

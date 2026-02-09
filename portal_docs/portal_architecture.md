@@ -300,6 +300,103 @@ Response:
 }
 ```
 
+## Book Average and Handicap Management
+
+### Overview
+
+Participants have two related bowling statistics:
+- **Book Average (entering_avg)**: The official USBC book average, imported from IGBO XML or manually entered
+- **Handicap**: Auto-calculated from book average, never manually editable
+
+### Handicap Calculation Formula
+
+```
+handicap = floor((225 - bookAverage) * 0.9)
+```
+
+Examples:
+- 170 average → floor((225 - 170) * 0.9) = 49 handicap
+- 200 average → floor((225 - 200) * 0.9) = 22 handicap
+- 225 average → floor((225 - 225) * 0.9) = 0 handicap
+
+### Where Handicap is Calculated
+
+**1. XML Import Flow**
+- Location: `src/utils/portal/importIgboXml.js` line 104
+- Extracts book average from IGBO XML (handling attributes)
+- Stores in `scores.entering_avg` column
+- Database calculates handicap on insert/update
+
+**2. Participant Edit Flow**
+- Location: `src/utils/portal/participant-db.js` lines 211-214
+- Admin edits only the book average field
+- Handicap field removed from edit form (was previously editable)
+- Backend auto-calculates: `const handicap = avg !== null ? Math.floor((225 - avg) * 0.9) : null;`
+- Upsert updates both `entering_avg` and `handicap` columns
+
+**3. Display in UI**
+- Admin Dashboard: Shows both book average and handicap columns after email
+- Participant Card: Displays book average with label "Book Average:"
+- Participant Edit Form: Only book average input shown, handicap calculated on save
+
+### XML Attribute Handling
+
+IGBO XML includes attributes on `BOOK_AVERAGE`:
+
+```xml
+<BOOK_AVERAGE verified="YES">170</BOOK_AVERAGE>
+```
+
+The `fast-xml-parser` library converts elements with attributes to objects:
+
+```javascript
+{
+  '#text': 170,           // The actual value
+  '@_verified': 'YES'     // The attribute
+}
+```
+
+**Solution** (`importIgboXml.js` line 104):
+```javascript
+const bookAvg = toNumber(person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE);
+```
+
+This extracts the `#text` property when attributes exist, or uses the value directly when no attributes present.
+
+### Database Schema
+
+The `scores` table requires a unique constraint on `(pid, event_type)` for idempotent imports:
+
+```sql
+-- Unique constraint enables ON DUPLICATE KEY UPDATE
+create unique index if not exists pid_event_unique
+  on scores (pid, event_type);
+```
+
+**Migration:** `backend/scripts/migrations/add-scores-unique-constraint.sh`
+- Removes existing duplicate records (keeps most recent)
+- Adds unique index `pid_event_unique`
+- Runs automatically during portal deployment
+
+See [portal_database_architecture.md](portal_database_architecture.md#scores-table-book-average-and-handicap) for complete database details.
+
+### Files Changed
+
+**Backend:**
+- `src/utils/portal/importIgboXml.js` - XML parsing with attribute extraction
+- `src/utils/portal/participant-db.js` - Auto-calculation in `upsertScores()`
+- `backend/scripts/migrations/add-scores-unique-constraint.sh` - Database migration
+
+**Frontend:**
+- `src/components/Portal/ParticipantEditForm/ParticipantEditForm.js` - Removed handicap input field
+- `src/pages/portal/participant/[pid].js` - Removed handicap from form state and API payload
+
+**Test Coverage:**
+- `tests/unit/migrations/add-scores-unique-constraint.test.js` (8 tests)
+- `tests/unit/handicap-calculation.test.js` (10 tests)
+- `tests/unit/handicap-auto-calculation.test.js` (8 tests)
+- `tests/unit/book-average-api.test.js` (5 tests)
+
 ## Data Import
 
 - CSV seed script for local/staging data.
