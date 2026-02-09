@@ -1,135 +1,272 @@
 #!/bin/bash
+# SFGGC Unified Deployment Script
+#
+# Deploys static site, portal application, or both to production server.
+#
+# Usage:
+#   ./deploy_scripts/deploy.sh [OPTIONS]
+#
+# Options:
+#   --static          Deploy static site only (default if no flags)
+#   --portal          Deploy portal application only
+#   --all             Deploy both static and portal
+#   --dry-run         Show what would happen without executing
+#   --verbose         Show detailed dry-run output (with --dry-run)
+#   --debug           Show full debug output (with --dry-run)
+#   --config FILE     Use alternate config file (default: .deployrc)
+#   --server HOST     Override SSH host
+#   --user USER       Override SSH user
+#   --path PATH       Override deployment path
+#   --force           Skip confirmation prompts
+#   -h, --help        Show this help
+#
+# Examples:
+#   # Deploy static site (default)
+#   ./deploy_scripts/deploy.sh
+#
+#   # Deploy portal only
+#   ./deploy_scripts/deploy.sh --portal
+#
+#   # Deploy everything
+#   ./deploy_scripts/deploy.sh --all
+#
+#   # Dry run for portal
+#   ./deploy_scripts/deploy.sh --portal --dry-run
+#
+#   # Dry run with details
+#   ./deploy_scripts/deploy.sh --all --dry-run --verbose
 
-# SFGGC Website Deployment Script for CloudPanel
-# This script helps deploy the static Next.js site to your CloudPanel server
+set -euo pipefail
 
-echo "🚀 SFGGC Website Deployment Script"
-echo "=================================="
+# ─── Get script directory ────────────────────────────────────────────────────
 
-# Check if required information is provided
-if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
-    echo "❌ Usage: ./deploy_scripts/deploy.sh <ssh_user@server> <domain_path> <domain_name>"
-    echo ""
-    echo "Example:"
-    echo "  ./deploy_scripts/deploy.sh user@your-server.com /home/user/domains/yourdomain.com/public_html yourdomain.com"
-    echo ""
-    echo "Where:"
-    echo "  - ssh_user@server: Your SSH connection string"
-    echo "  - domain_path: Path to your website's public_html directory"
-    echo "  - domain_name: Your domain name (for testing)"
-    echo ""
-    exit 1
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SSH_CONNECTION="$1"
-DOMAIN_PATH="$2"
-DOMAIN_NAME="$3"
+# ─── Source function libraries ───────────────────────────────────────────────
 
-echo "📋 Deployment Configuration:"
-echo "  SSH: $SSH_CONNECTION"
-echo "  Path: $DOMAIN_PATH"
-echo "  Domain: $DOMAIN_NAME"
-echo ""
+source "$SCRIPT_DIR/lib/output.sh"
+source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/ssh.sh"
+source "$SCRIPT_DIR/lib/validation.sh"
+source "$SCRIPT_DIR/lib/build.sh"
+source "$SCRIPT_DIR/lib/deploy-static.sh"
+source "$SCRIPT_DIR/lib/deploy-portal.sh"
 
-# Check if out directory exists
-if [ ! -d "out" ]; then
-    echo "❌ Error: 'out' directory not found!"
-    echo "Please run 'npm run build' first to generate static files."
-    exit 1
-fi
+# ─── Default values ──────────────────────────────────────────────────────────
 
-echo "📦 Preparing deployment..."
+DEPLOY_STATIC=false
+DEPLOY_PORTAL=false
+DEPLOY_ALL=false
+DRY_RUN=false
+VERBOSE=false
+DEBUG=false
+FORCE=false
+CONFIG_FILE=".deployrc"
 
-# Create a temporary directory for deployment
-TEMP_DIR="deploy_temp_$(date +%s)"
-mkdir -p "$TEMP_DIR"
+CLI_SSH_HOST=""
+CLI_SSH_USER=""
+CLI_STATIC_PATH=""
+CLI_PORTAL_PATH=""
 
-# Copy all files from out directory
-echo "📁 Copying files to temporary directory..."
-cp -r out/* "$TEMP_DIR/"
+# ─── Help function ───────────────────────────────────────────────────────────
 
-# Create .htaccess for Apache (if needed)
-cat > "$TEMP_DIR/.htaccess" << 'EOF'
-# Enable compression
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/plain
-    AddOutputFilterByType DEFLATE text/html
-    AddOutputFilterByType DEFLATE text/xml
-    AddOutputFilterByType DEFLATE text/css
-    AddOutputFilterByType DEFLATE application/xml
-    AddOutputFilterByType DEFLATE application/xhtml+xml
-    AddOutputFilterByType DEFLATE application/rss+xml
-    AddOutputFilterByType DEFLATE application/javascript
-    AddOutputFilterByType DEFLATE application/x-javascript
-</IfModule>
+show_help() {
+  cat << 'EOF'
+SFGGC Unified Deployment Script
 
-# Cache static assets
-<IfModule mod_expires.c>
-    ExpiresActive on
-    ExpiresByType text/css "access plus 1 year"
-    ExpiresByType application/javascript "access plus 1 year"
-    ExpiresByType image/png "access plus 1 year"
-    ExpiresByType image/jpg "access plus 1 year"
-    ExpiresByType image/jpeg "access plus 1 year"
-    ExpiresByType image/gif "access plus 1 year"
-    ExpiresByType image/svg+xml "access plus 1 year"
-</IfModule>
+Usage:
+  ./deploy_scripts/deploy.sh [OPTIONS]
 
-# Security headers
-<IfModule mod_headers.c>
-    Header always set X-Content-Type-Options nosniff
-    Header always set X-Frame-Options DENY
-    Header always set X-XSS-Protection "1; mode=block"
-</IfModule>
+Options:
+  --static          Deploy static site only (default if no flags)
+  --portal          Deploy portal application only
+  --all             Deploy both static and portal
+  --dry-run         Show what would happen without executing
+  --verbose         Show detailed dry-run output (with --dry-run)
+  --debug           Show full debug output (with --dry-run)
+  --config FILE     Use alternate config file (default: .deployrc)
+  --server HOST     Override SSH host
+  --user USER       Override SSH user
+  --force           Skip confirmation prompts
+  -h, --help        Show this help
+
+Examples:
+  # Deploy static site (default)
+  ./deploy_scripts/deploy.sh
+
+  # Deploy portal only
+  ./deploy_scripts/deploy.sh --portal
+
+  # Deploy everything
+  ./deploy_scripts/deploy.sh --all
+
+  # Dry run for portal
+  ./deploy_scripts/deploy.sh --portal --dry-run
+
+  # Dry run with details
+  ./deploy_scripts/deploy.sh --all --dry-run --verbose
+
+Configuration:
+  Create .deployrc from .deployrc.example for default settings:
+    cp .deployrc.example .deployrc
+    # Edit .deployrc with your values
+    chmod 600 .deployrc
+
+For more information, see:
+  deploy_docs/UNIFIED_DEPLOYMENT.md
 EOF
+}
 
-echo "🔧 Created .htaccess file for Apache optimization"
+# ─── Parse arguments ─────────────────────────────────────────────────────────
 
-# Upload files to server
-echo "📤 Uploading files to server..."
-echo "This may take a few minutes depending on your connection speed..."
+parse_arguments() {
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --static)
+        DEPLOY_STATIC=true
+        shift
+        ;;
+      --portal)
+        DEPLOY_PORTAL=true
+        shift
+        ;;
+      --all)
+        DEPLOY_ALL=true
+        shift
+        ;;
+      --dry-run)
+        DRY_RUN=true
+        shift
+        ;;
+      --verbose)
+        VERBOSE=true
+        shift
+        ;;
+      --debug)
+        DEBUG=true
+        VERBOSE=true  # Debug implies verbose
+        shift
+        ;;
+      --config)
+        CONFIG_FILE="$2"
+        shift 2
+        ;;
+      --server)
+        CLI_SSH_HOST="$2"
+        shift 2
+        ;;
+      --user)
+        CLI_SSH_USER="$2"
+        shift 2
+        ;;
+      --force)
+        FORCE=true
+        shift
+        ;;
+      -h|--help)
+        show_help
+        exit 0
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        echo ""
+        show_help
+        exit 1
+        ;;
+    esac
+  done
 
-# Create backup of existing files (if any)
-echo "💾 Creating backup of existing files..."
-ssh "$SSH_CONNECTION" "if [ -d '$DOMAIN_PATH' ]; then cp -r '$DOMAIN_PATH' '${DOMAIN_PATH}_backup_$(date +%s)'; fi"
+  # Export for use in sourced scripts
+  export DRY_RUN VERBOSE DEBUG FORCE
+}
 
-# Upload new files
-rsync -avz --delete "$TEMP_DIR/" "$SSH_CONNECTION:$DOMAIN_PATH/"
+# ─── Determine deployment mode ───────────────────────────────────────────────
 
-if [ $? -eq 0 ]; then
-    echo "✅ Files uploaded successfully!"
-else
-    echo "❌ Upload failed! Please check your SSH connection and paths."
-    rm -rf "$TEMP_DIR"
-    exit 1
-fi
+determine_mode() {
+  if [ "$DEPLOY_ALL" = true ]; then
+    echo "all"
+  elif [ "$DEPLOY_PORTAL" = true ]; then
+    echo "portal"
+  else
+    echo "static"  # Default
+  fi
+}
 
-# Clean up temporary directory
-rm -rf "$TEMP_DIR"
+# ─── Main execution ──────────────────────────────────────────────────────────
 
-echo ""
-echo "🎉 Deployment completed successfully!"
-echo ""
-echo "🌐 Your website should now be available at:"
-echo "   http://$DOMAIN_NAME"
-echo "   https://$DOMAIN_NAME (if SSL is configured)"
-echo ""
-echo "📝 Next steps:"
-echo "   1. Test your website in a browser"
-echo "   2. Check that all pages load correctly"
-echo "   3. Verify that images and CSS are loading"
-echo "   4. Test the theme switcher functionality"
-echo ""
-echo "🔧 If you need to make changes:"
-echo "   1. Edit your code locally"
-echo "   2. Run 'npm run build'"
-echo "   3. Run this deployment script again"
-echo ""
+main() {
+  local start_time=$(date +%s)
 
+  # Parse command line arguments
+  parse_arguments "$@"
 
+  # Determine deployment mode
+  local mode=$(determine_mode)
+  export DEPLOY_MODE="$mode"
 
+  # Load configuration
+  load_config "$CONFIG_FILE"
 
+  # Set defaults for missing values
+  set_defaults
 
+  # Apply CLI overrides
+  override_from_cli
 
+  # Validate configuration
+  validate_config
 
+  # Show deployment plan
+  show_deployment_plan "$mode"
 
+  # Show debug config if enabled
+  if [ "$DEBUG" = true ]; then
+    show_config
+  fi
+
+  # Confirm if not forced and not dry-run
+  if [ "$FORCE" != true ] && [ "$DRY_RUN" != true ]; then
+    confirm_deployment || exit 0
+  fi
+
+  # Run pre-flight checks
+  if [ "$DRY_RUN" != true ]; then
+    run_all_checks "$mode" || exit 1
+  fi
+
+  # Execute deployment based on mode
+  case "$mode" in
+    static)
+      deploy_static || exit 1
+      ;;
+    portal)
+      deploy_portal || exit 1
+      ;;
+    all)
+      deploy_static || exit 1
+      echo ""
+      deploy_portal || exit 1
+      ;;
+  esac
+
+  # Show final summary
+  echo ""
+  log_section "DEPLOYMENT COMPLETE"
+  log_elapsed_time "$start_time"
+
+  if [ -n "${DEPLOY_DOMAIN:-}" ]; then
+    echo ""
+    log_info "Your deployment is available at:"
+    if [ "$mode" = "static" ] || [ "$mode" = "all" ]; then
+      log_info "  Static site: https://${DEPLOY_DOMAIN}"
+    fi
+    if [ "$mode" = "portal" ] || [ "$mode" = "all" ]; then
+      log_info "  Portal:      https://${DEPLOY_DOMAIN}/portal/"
+    fi
+  fi
+
+  echo ""
+}
+
+# Run main with all arguments
+main "$@"

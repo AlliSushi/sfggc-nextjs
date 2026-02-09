@@ -38,3 +38,10 @@ yarn-error.log*
 
 # build files
 package-lock.json
+
+# deployment configuration (optional custom config)
+.deployrc
+
+# deployment script backups
+deploy_scripts/lib/*.backup
+next.config.js.backup

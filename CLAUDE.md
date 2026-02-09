@@ -80,18 +80,45 @@ bash backend/scripts/admin/create-super-admin.sh
 
 **CRITICAL:** All deployment scripts must be run from the project root directory (not from within `deploy_scripts/`) because they use relative paths to the `out` directory.
 
+#### Unified Deployment System
+
+The project uses a unified deployment script that supports static site, portal application, or both:
+
 ```bash
-# Build the static site first
-npm run build
+# Deploy static site (default)
+./deploy_scripts/deploy.sh
 
-# Automated deployment
-./deploy_scripts/deploy.sh <ssh_user@server> <domain_path> <domain_name>
+# Deploy portal application
+./deploy_scripts/deploy.sh --portal
 
-# Manual step-by-step deployment
-./deploy_scripts/deploy-manual.sh <ssh_user@server> <domain_path> <domain_name>
+# Deploy everything (static + portal)
+./deploy_scripts/deploy.sh --all
+
+# Preview deployment with dry-run
+./deploy_scripts/deploy.sh --portal --dry-run
+
+# Dry-run with verbose output
+./deploy_scripts/deploy.sh --all --dry-run --verbose
 ```
 
-See `deploy_docs/DEPLOYMENT.md` for detailed deployment instructions and `SERVER_SETUP.md` for server configuration and troubleshooting.
+**Configuration:**
+- Production defaults are already configured in `.deployrc.example` (used automatically)
+- Only create custom `.deployrc` if deploying to staging/test environments
+- All secrets (passwords) are prompted interactively during deployment, never stored locally
+
+**First-time portal deployment:**
+- Use `--portal` flag for interactive setup
+- Script will prompt for:
+  - Database password (username pre-configured as "goldengate") → stored in server's `.env.local`
+  - SMTP password (username pre-configured) → stored in server's `.env.local`
+  - Super admin account (email, name, password) → stored in database
+  - Session secret → auto-generated, stored in server's `.env.local`
+- Database schema will be initialized automatically
+- All secrets remain on the server only
+
+**Subsequent deployments:** Skip prompts (configuration already exists on server), just sync code and restart.
+
+See `deploy_docs/UNIFIED_DEPLOYMENT.md` for complete deployment guide and `SERVER_SETUP.md` for server configuration and troubleshooting.
 
 ## Architecture
 
