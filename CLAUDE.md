@@ -118,6 +118,8 @@ The project uses a unified deployment script that supports static site, portal a
 
 **Subsequent deployments:** Skip prompts (configuration already exists on server), just sync code and restart.
 
+**Critical deployment patterns:** See `CLAUDE-DEPLOYMENT.md` for credential handling, flag behavior, CI/CD patterns, and common gotchas.
+
 See `deploy_docs/UNIFIED_DEPLOYMENT.md` for complete deployment guide and `SERVER_SETUP.md` for server configuration and troubleshooting.
 
 ## Architecture
@@ -291,9 +293,11 @@ Most components are sections with:
 - See `deploy_docs/MIGRATIONS.md` for migration system details
 
 **Documentation:**
+- `CLAUDE-DEPLOYMENT.md` - Deployment patterns, credential handling, CI/CD, critical gotchas
 - `portal_docs/portal_architecture.md` - Complete portal architecture
 - `portal_docs/portal_database_architecture.md` - Database design details
 - `deploy_docs/DEPLOYMENT.md` - Deployment guide
+- `deploy_docs/UNIFIED_DEPLOYMENT.md` - Technical deployment documentation
 - `SERVER_SETUP.md` - Server configuration and troubleshooting
 
 ## Development Notes

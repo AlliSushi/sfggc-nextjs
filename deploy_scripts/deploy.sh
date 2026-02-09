@@ -17,7 +17,7 @@
 #   --server HOST     Override SSH host
 #   --user USER       Override SSH user
 #   --path PATH       Override deployment path
-#   --force           Skip confirmation prompts
+#   -y, --yes         Skip confirmation prompts (auto-confirm deployment)
 #   --setup           Force environment reconfiguration (recreates .env.local)
 #   --skip-migrations Skip database migrations (not recommended)
 #   -h, --help        Show this help
@@ -94,7 +94,7 @@ Options:
   --config FILE     Use alternate config file (default: .deployrc)
   --server HOST     Override SSH host
   --user USER       Override SSH user
-  --force           Skip confirmation prompts
+  -y, --yes         Skip confirmation prompts (auto-confirm deployment)
   --setup           Force environment reconfiguration (recreates .env.local)
   -h, --help        Show this help
 
@@ -116,6 +116,9 @@ Examples:
 
   # Force environment reconfiguration (recover from broken .env.local)
   ./deploy_scripts/deploy.sh --portal --setup
+
+  # Deploy everything with auto-confirmation
+  ./deploy_scripts/deploy.sh --all --yes
 
 Configuration:
   Create .deployrc from .deployrc.example for default settings:
@@ -170,7 +173,7 @@ parse_arguments() {
         CLI_SSH_USER="$2"
         shift 2
         ;;
-      --force)
+      -y|--yes|--force)
         FORCE=true
         shift
         ;;

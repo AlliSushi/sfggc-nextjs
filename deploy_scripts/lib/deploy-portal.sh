@@ -87,6 +87,15 @@ setup_portal_environment() {
   # Get database password (from env var or prompt)
   local DB_PASS="${DEPLOY_DB_PASSWORD:-}"
   if [ -z "$DB_PASS" ]; then
+    # Check if running interactively (stdin is a terminal)
+    if [ ! -t 0 ]; then
+      log_error "Database password required but not provided"
+      log_error "Running in non-interactive mode (piped or background)"
+      log_error ""
+      log_error "Solution: Set environment variable:"
+      log_error "  export DEPLOY_DB_PASSWORD='your_password'"
+      return 1
+    fi
     read -sp "  Database password: " DB_PASS
     echo ""
   else
@@ -107,6 +116,12 @@ setup_portal_environment() {
   # Get SMTP password (from env var or prompt)
   local SMTP_PASS="${DEPLOY_SMTP_PASSWORD:-}"
   if [ -z "$SMTP_PASS" ]; then
+    # Check if running interactively
+    if [ ! -t 0 ]; then
+      log_error "SMTP password required but not provided"
+      log_error "Set environment variable: export DEPLOY_SMTP_PASSWORD='your_password'"
+      return 1
+    fi
     read -sp "  SMTP password (AWS SES): " SMTP_PASS
     echo ""
   else
@@ -209,18 +224,34 @@ create_super_admin() {
     local ADMIN_PASSWORD="${DEPLOY_ADMIN_PASSWORD:-}"
 
     if [ -z "$ADMIN_EMAIL" ]; then
+      # Check if running interactively
+      if [ ! -t 0 ]; then
+        log_error "Admin email required but not provided"
+        log_error "Set environment variable: export DEPLOY_ADMIN_EMAIL='your@email.com'"
+        return 1
+      fi
       read -p "  Admin email: " ADMIN_EMAIL
     else
       log_info "Admin email: $ADMIN_EMAIL (from DEPLOY_ADMIN_EMAIL env var)"
     fi
 
     if [ -z "$ADMIN_NAME" ]; then
+      if [ ! -t 0 ]; then
+        log_error "Admin name required but not provided"
+        log_error "Set environment variable: export DEPLOY_ADMIN_NAME='Your Name'"
+        return 1
+      fi
       read -p "  Admin full name: " ADMIN_NAME
     else
       log_info "Admin name: $ADMIN_NAME (from DEPLOY_ADMIN_NAME env var)"
     fi
 
     if [ -z "$ADMIN_PASSWORD" ]; then
+      if [ ! -t 0 ]; then
+        log_error "Admin password required but not provided"
+        log_error "Set environment variable: export DEPLOY_ADMIN_PASSWORD='your_password'"
+        return 1
+      fi
       read -sp "  Admin password: " ADMIN_PASSWORD
       echo ""
     else

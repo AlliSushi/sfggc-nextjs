@@ -164,6 +164,18 @@ Use the provided deployment script:
 ./deploy_scripts/deploy.sh user@myserver.com /home/user/domains/sfggc.com/public_html sfggc.com
 ```
 
+**Options:**
+
+```bash
+# Skip confirmation prompt (useful for CI/CD)
+./deploy_scripts/deploy.sh --yes
+
+# Alternative syntax
+./deploy_scripts/deploy.sh -y
+```
+
+The `--yes` (or `-y`) flag skips the "Do you want to deploy?" confirmation prompt, making the script suitable for automated deployments.
+
 ### 4. Manual Deployment (Alternative)
 
 If you prefer to deploy manually:

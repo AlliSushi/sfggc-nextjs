@@ -8,6 +8,7 @@ This guide covers the unified deployment system for the SFGGC Next.js project, w
 - [Configuration](#configuration)
 - [Deployment Modes](#deployment-modes)
 - [First-Time Portal Deployment](#first-time-portal-deployment)
+- [Command Line Flags](#command-line-flags)
 - [Dry-Run Mode](#dry-run-mode)
 - [Troubleshooting](#troubleshooting)
 - [Advanced Usage](#advanced-usage)
@@ -34,12 +35,21 @@ This guide covers the unified deployment system for the SFGGC Next.js project, w
 # 3. Deploy everything
 ./deploy_scripts/deploy.sh --all
 
-# 4. Non-interactive deployment (for CI/CD)
+# 4. Skip deployment confirmation prompt
+./deploy_scripts/deploy.sh --portal --yes
+
+# 5. Force environment reconfiguration (recover from broken .env.local)
+./deploy_scripts/deploy.sh --portal --setup
+
+# 6. Non-interactive deployment (for CI/CD)
 export DEPLOY_DB_PASSWORD="secret" DEPLOY_SMTP_PASSWORD="secret"
-./deploy_scripts/deploy.sh --portal  # No prompts!
+./deploy_scripts/deploy.sh --portal --yes  # No prompts!
 ```
 
-**Note:** First-time portal deployments prompt for secrets (database password, SMTP password, admin account). See [Non-Interactive Mode](#non-interactive-mode-optional---for-automationci-cd) for automation via environment variables.
+**Important Notes:**
+- First-time portal deployments prompt for secrets (database password, SMTP password, admin account). See [Non-Interactive Mode](#non-interactive-mode-optional---for-automationci-cd) for automation via environment variables.
+- Use `--yes` or `-y` to skip the "Do you want to deploy?" confirmation prompt (does not affect credential prompts).
+- Use `--setup` to force environment reconfiguration, useful for recovering from broken `.env.local` files on the server.
 
 ---
 
@@ -235,9 +245,28 @@ export DEPLOY_ADMIN_PASSWORD="AdminSecurePass!"
 - Mix and match: set some via env vars, prompt for others
 - After first deployment, subsequent deployments don't need secrets (config/admins already exist)
 
+**Non-Interactive Mode Safeguards:**
+When running in non-interactive mode (piped input or background execution), the script detects it and fails fast if required environment variables aren't set:
+
+```bash
+# This will fail with helpful error message
+echo "" | ./deploy_scripts/deploy.sh --portal
+
+# Error output:
+# ✗ Database password required but not provided
+# ✗ Running in non-interactive mode (piped or background)
+#
+# Solution: Set environment variable:
+#   export DEPLOY_DB_PASSWORD='your_password'
+```
+
+This prevents silent failures and broken deployments with empty credentials.
+
 **CI/CD Example (GitHub Actions):**
+
+For first-time deployment:
 ```yaml
-- name: Deploy Portal
+- name: Deploy Portal (First Time)
   env:
     DEPLOY_DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
     DEPLOY_SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
@@ -245,7 +274,24 @@ export DEPLOY_ADMIN_PASSWORD="AdminSecurePass!"
     DEPLOY_ADMIN_NAME: ${{ secrets.ADMIN_NAME }}
     DEPLOY_ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
   run: |
-    ./deploy_scripts/deploy.sh --portal
+    ./deploy_scripts/deploy.sh --portal --yes
+```
+
+For subsequent deployments (credentials already on server):
+```yaml
+- name: Deploy Portal Updates
+  run: |
+    ./deploy_scripts/deploy.sh --portal --yes
+```
+
+To force reconfiguration with new credentials:
+```yaml
+- name: Update Portal Credentials
+  env:
+    DEPLOY_DB_PASSWORD: ${{ secrets.NEW_DB_PASSWORD }}
+    DEPLOY_SMTP_PASSWORD: ${{ secrets.NEW_SMTP_PASSWORD }}
+  run: |
+    ./deploy_scripts/deploy.sh --portal --setup --yes
 ```
 
 ### What Gets Created
@@ -290,6 +336,65 @@ After first-time setup, the script will:
 - Skip database initialization (schema exists)
 - Skip admin creation (admins exist)
 - Just sync code, install dependencies, build, and restart PM2
+
+---
+
+## Command Line Flags
+
+### Flag Reference
+
+| Flag | Short | Purpose | Affects Confirmation | Affects Credentials | Affects Setup |
+|------|-------|---------|---------------------|--------------------|--------------|
+| `--yes` | `-y` | Skip deployment confirmation | ✓ Skips | ✗ No effect | ✗ No effect |
+| `--force` | | Alias for `--yes` (backwards compatibility) | ✓ Skips | ✗ No effect | ✗ No effect |
+| `--setup` | | Force environment reconfiguration | ✗ No effect | ✗ No effect | ✓ Forces |
+
+### Understanding Flag Behavior
+
+**`--yes` / `-y` Flag:**
+- **What it does:** Skips the "Do you want to deploy? [y/N]" confirmation prompt
+- **What it does NOT do:** Does not skip credential prompts during first-time setup
+- **Use case:** Automated deployments, CI/CD pipelines where you want to skip manual confirmation
+- **Example:**
+  ```bash
+  ./deploy_scripts/deploy.sh --portal --yes
+  # Skips: "Do you want to deploy?"
+  # Still prompts: Database password, SMTP password (if first-time)
+  ```
+
+**`--setup` Flag:**
+- **What it does:** Forces reconfiguration of `.env.local` on the server, even if it already exists
+- **What it does NOT do:** Does not skip confirmation prompt (use `--yes` for that)
+- **Use case:** Recovering from broken `.env.local`, changing credentials, disaster recovery
+- **Example:**
+  ```bash
+  ./deploy_scripts/deploy.sh --portal --setup
+  # Prompts: "Do you want to deploy?" (unless --yes also used)
+  # Prompts: Database password, SMTP password (always, even if .env.local exists)
+  # Deletes: Existing .env.local
+  # Creates: Fresh .env.local with new credentials
+  ```
+
+**Combining Flags:**
+```bash
+# Most common CI/CD pattern
+./deploy_scripts/deploy.sh --portal --yes
+# Skips confirmation, uses existing .env.local
+
+# Reconfigure without confirmation prompt
+./deploy_scripts/deploy.sh --portal --setup --yes
+# Skips confirmation, forces credential prompts
+```
+
+### Common Scenarios
+
+| Scenario | Command | What Happens |
+|----------|---------|--------------|
+| First deployment (interactive) | `./deploy_scripts/deploy.sh --portal` | Prompts for confirmation + credentials |
+| First deployment (CI/CD) | `./deploy_scripts/deploy.sh --portal --yes` + env vars | Skips confirmation, uses env vars for credentials |
+| Update deployment | `./deploy_scripts/deploy.sh --portal --yes` | Skips confirmation, uses existing `.env.local` |
+| Fix broken `.env.local` | `./deploy_scripts/deploy.sh --portal --setup` | Prompts for confirmation + credentials, recreates `.env.local` |
+| Change credentials (CI/CD) | `./deploy_scripts/deploy.sh --portal --setup --yes` + env vars | Skips confirmation, uses env vars, recreates `.env.local` |
 
 ---
 
@@ -430,11 +535,14 @@ Script doesn't prompt for database credentials
 
 **Solution:**
 ```bash
-# Remove existing .env.local to force setup
+# Use --setup flag to force reconfiguration
+./deploy_scripts/deploy.sh --portal --setup
+
+# Alternative: Manually remove .env.local
 ssh goldengateclassic@54.70.1.215
 rm ~/htdocs/www.goldengateclassic.org/portal-app/.env.local
 
-# Run deployment again
+# Then run deployment again
 ./deploy_scripts/deploy.sh --portal
 ```
 
@@ -506,6 +614,52 @@ SSH key authentication isn't configured, or deployment script isn't using your S
    ```bash
    DEPLOY_SSH_HOST="sfggc"  # Use SSH alias instead of IP
    ```
+
+### Broken .env.local with Empty Passwords
+
+**Issue:**
+Portal won't start, database connection fails, or SMTP errors occur. Checking the server's `.env.local` reveals empty password fields:
+
+```bash
+PORTAL_DATABASE_URL=mysql://goldengate:@shared2.cdms8mviovca...
+SMTP_PASS=
+```
+
+**Cause:**
+This occurred in earlier versions of the deployment script when using the `--force` flag (now `--yes`) during first-time setup. The flag would skip the confirmation prompt but also inadvertently cause credential prompts to fail silently, resulting in empty passwords in `.env.local`.
+
+**Symptoms:**
+- Portal returns 502 Bad Gateway
+- PM2 logs show database connection errors
+- Login emails don't send (SMTP authentication failures)
+- `.env.local` exists but has empty password values
+
+**Solution:**
+
+Use the `--setup` flag to force reconfiguration:
+
+```bash
+./deploy_scripts/deploy.sh --portal --setup
+```
+
+The script will:
+1. Detect the existing `.env.local`
+2. Prompt you to confirm reconfiguration
+3. Interactively prompt for database password, SMTP password, and other credentials
+4. Create a fresh `.env.local` with correct values
+5. Restart the portal application
+
+**Skip confirmation prompt:**
+
+```bash
+./deploy_scripts/deploy.sh --portal --setup --yes
+```
+
+**Why this is fixed now:**
+The deployment script (v1.1+, Feb 2026) now properly separates concerns:
+- `--yes` (or `--force`) only skips the deployment confirmation
+- Credential prompts always work interactively during setup
+- Non-interactive mode (CI/CD) fails fast if environment variables aren't set
 
 ### Node.js Not Found on Server (NVM Users)
 
@@ -591,9 +745,41 @@ cp .deployrc.example .deployrc.staging
 ### Skip Confirmation Prompts
 
 ```bash
-# Useful for CI/CD pipelines
+# Skip "Do you want to deploy?" confirmation
+./deploy_scripts/deploy.sh --all --yes
+
+# Alternative syntax (same behavior)
+./deploy_scripts/deploy.sh --portal -y
+
+# Note: --force is a backwards-compatible alias for --yes
 ./deploy_scripts/deploy.sh --all --force
 ```
+
+**Important:** The `--yes` flag only skips the deployment confirmation prompt. It does NOT skip credential prompts during first-time portal setup. Credential prompts always work interactively unless you provide them via environment variables.
+
+### Force Environment Reconfiguration
+
+If your server's `.env.local` file becomes corrupted or contains incorrect credentials, use `--setup` to force reconfiguration:
+
+```bash
+# Force environment reconfiguration
+./deploy_scripts/deploy.sh --portal --setup
+
+# With --yes to skip confirmation prompt
+./deploy_scripts/deploy.sh --portal --setup --yes
+```
+
+**What `--setup` does:**
+- Deletes the existing `.env.local` on the server
+- Re-prompts for database password, SMTP password, and other credentials
+- Creates a fresh `.env.local` with the new values
+- Does NOT recreate admin accounts (existing admins remain)
+
+**When to use `--setup`:**
+- Database credentials changed
+- SMTP credentials changed
+- `.env.local` file is corrupted or contains errors
+- You need to change the session secret or base URL
 
 ### Verify Deployment Plan
 

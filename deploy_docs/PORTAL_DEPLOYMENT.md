@@ -16,11 +16,20 @@ This guide covers deploying the SFGGC tournament portal (admin dashboard + parti
 
 ## Quick Deploy (Automated Script)
 
-The `deploy-portal.sh` script handles everything: file sync, dependency install, database init, build, and PM2 setup.
+The unified deployment script handles everything: file sync, dependency install, database init, build, and PM2 setup.
 
 ```bash
 # Run from the project root directory
-./deploy_scripts/deploy-portal.sh goldengateclassic@54.70.1.215
+./deploy_scripts/deploy.sh --portal
+
+# Skip confirmation prompt
+./deploy_scripts/deploy.sh --portal --yes
+
+# Force environment reconfiguration (if .env.local is broken)
+./deploy_scripts/deploy.sh --portal --setup
+
+# Combine flags
+./deploy_scripts/deploy.sh --portal --setup --yes
 ```
 
 **First-time deploy:** The script detects no `.env.local` on the server and interactively prompts for:
@@ -31,7 +40,13 @@ The `deploy-portal.sh` script handles everything: file sync, dependency install,
 
 **Subsequent deploys:** The script skips environment and admin setup, syncs files, reinstalls dependencies, rebuilds, and restarts PM2.
 
-After the script finishes, you must configure nginx (see Section 6 below). This is a one-time manual step in CloudPanel.
+**Flags:**
+- `--yes` or `-y`: Skip the "Do you want to deploy?" confirmation prompt (does not affect credential prompts)
+- `--setup`: Force environment reconfiguration, useful for recovering from broken `.env.local` files
+
+**Backwards compatibility:** The old `deploy-portal.sh` script still works but shows a deprecation warning.
+
+After the script finishes, you must configure nginx (see Section 7 below). This is a one-time manual step in CloudPanel.
 
 ---
 
@@ -199,7 +214,10 @@ bash scripts/dev/import-igbo-xml.sh /path/to/igbo.xml
 
 ```bash
 # From your local machine (project root)
-./deploy_scripts/deploy-portal.sh goldengateclassic@54.70.1.215
+./deploy_scripts/deploy.sh --portal
+
+# Skip confirmation prompt
+./deploy_scripts/deploy.sh --portal --yes
 ```
 
 Or manually:
@@ -240,3 +258,14 @@ Sessions are signed with `ADMIN_SESSION_SECRET`. If this value changes, all exis
 
 ### Static site pages return 404 after adding portal
 Make sure the `location /` block with `try_files` is still present in the nginx config. The portal proxy blocks should be added alongside it, not replace it.
+
+### Broken .env.local with empty passwords
+If your portal won't start and you see empty passwords in `.env.local` on the server, use the `--setup` flag to force reconfiguration:
+
+```bash
+./deploy_scripts/deploy.sh --portal --setup
+```
+
+This can happen if an older version of the deployment script was used with the `--force` flag during first-time setup. The script will now properly prompt for all credentials and create a fresh `.env.local` file.
+
+See the [UNIFIED_DEPLOYMENT.md](UNIFIED_DEPLOYMENT.md#broken-envlocal-with-empty-passwords) guide for more details.
