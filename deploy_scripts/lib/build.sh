@@ -30,13 +30,24 @@ configure_static_build() {
     return 0
   fi
 
-  # Create static-mode config
+  # Create static-mode config (excludes /portal routes)
   cat > next.config.js << 'EOF'
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
   images: {
     unoptimized: true
+  },
+  // Exclude portal routes from static export
+  exportPathMap: async function (defaultPathMap) {
+    const pathMap = {};
+    for (const [path, route] of Object.entries(defaultPathMap)) {
+      // Only export non-portal pages
+      if (!path.startsWith('/portal') && !path.startsWith('/api/portal')) {
+        pathMap[path] = route;
+      }
+    }
+    return pathMap;
   }
 }
 
