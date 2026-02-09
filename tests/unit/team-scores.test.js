@@ -126,9 +126,13 @@ test(
       content.includes("left join scores s on s.pid = p.pid"),
       "Team API must join scores table to fetch team game scores"
     );
+    // After refactoring to use EVENT_TYPES constant, the filter uses parameterized query
+    const usesEventTypeFilter =
+      content.includes("event_type = 'team'") ||
+      (content.includes("event_type = ?") && content.includes("EVENT_TYPES.TEAM"));
     assert.ok(
-      content.includes("event_type = 'team'"),
-      "Team API must filter scores join to team event_type"
+      usesEventTypeFilter,
+      "Team API must filter scores join to team event_type (either literal or via EVENT_TYPES constant)"
     );
   }
 );
