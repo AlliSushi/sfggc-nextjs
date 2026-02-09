@@ -61,9 +61,9 @@ fi
 
 echo "Ensuring database exists: ${db_name}"
 if [[ -n "${db_pass}" ]]; then
-  MYSQL_PWD="${db_pass}" mysql "${MYSQL_ARGS[@]}" mysql -e "create database if not exists \`${db_name}\`;"
+  MYSQL_PWD="${db_pass}" mysql "${MYSQL_ARGS[@]}" mysql -e "create database if not exists \`${db_name}\`;" 2>/dev/null || echo "(Skipping database creation - may not have privileges, assuming database exists)"
 else
-  mysql "${MYSQL_ARGS[@]}" mysql -e "create database if not exists \`${db_name}\`;"
+  mysql "${MYSQL_ARGS[@]}" mysql -e "create database if not exists \`${db_name}\`;" 2>/dev/null || echo "(Skipping database creation - may not have privileges, assuming database exists)"
 fi
 
 echo "Initializing portal database schema..."
