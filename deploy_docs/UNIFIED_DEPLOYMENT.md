@@ -379,6 +379,43 @@ rm ~/htdocs/www.goldengateclassic.org/portal-app/.env.local
 ./deploy_scripts/deploy.sh --portal
 ```
 
+### Database/SMTP Passwords Prompted Again on Subsequent Deployments
+
+**Issue:**
+After first deployment, running the script again prompts for database and SMTP passwords even though `.env.local` already exists on the server
+
+**Cause:**
+Tilde (`~`) in `DEPLOY_PORTAL_PATH` was not being expanded correctly in SSH file existence checks, causing the script to think `.env.local` doesn't exist
+
+**Symptom:**
+You see these prompts even though you previously entered the credentials:
+```
+Database Configuration:
+  Database password: ********
+  SMTP password (AWS SES): ********
+```
+
+**Solution:**
+This was fixed in the deployment scripts (v1.1, Feb 2026). Update to the latest version:
+
+```bash
+# Pull latest changes
+git pull origin main
+
+# Verify the fix in deploy_scripts/lib/ssh.sh
+grep -A 2 "Expand tilde" deploy_scripts/lib/ssh.sh
+```
+
+**Manual Workaround** (if you can't update):
+Use absolute paths instead of tilde in `.deployrc`:
+```bash
+# Instead of:
+DEPLOY_PORTAL_PATH="~/htdocs/www.goldengateclassic.org/portal-app"
+
+# Use absolute path:
+DEPLOY_PORTAL_PATH="/home/goldengateclassic/htdocs/www.goldengateclassic.org/portal-app"
+```
+
 ### Password Prompted Multiple Times During Deployment
 
 **Issue:**

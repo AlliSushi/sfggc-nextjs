@@ -103,7 +103,9 @@ check_remote_file_exists() {
     return 0  # Assume exists in dry-run
   fi
 
-  ssh_command "[ -f \"$remote_path\" ]" 2>/dev/null
+  # Expand tilde by executing the test without quotes around the path
+  # This allows the remote shell to expand ~ to the home directory
+  ssh_command "[ -f $remote_path ]" 2>/dev/null
   return $?
 }
 
@@ -116,6 +118,8 @@ check_remote_dir_exists() {
     return 0  # Assume exists in dry-run
   fi
 
-  ssh_command "[ -d \"$remote_path\" ]" 2>/dev/null
+  # Expand tilde by executing the test without quotes around the path
+  # This allows the remote shell to expand ~ to the home directory
+  ssh_command "[ -d $remote_path ]" 2>/dev/null
   return $?
 }
