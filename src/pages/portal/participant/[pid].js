@@ -18,6 +18,7 @@ const DEFAULT_SCORES = ["", "", ""];
 const buildFormState = (participant) => ({
   firstName: participant?.firstName || "",
   lastName: participant?.lastName || "",
+  nickname: participant?.nickname || "",
   email: participant?.email || "",
   phone: participant?.phone || "",
   birthMonth: participant?.birthMonth || "",
@@ -32,8 +33,7 @@ const buildFormState = (participant) => ({
   laneTeam: participant?.lanes?.team || "",
   laneDoubles: participant?.lanes?.doubles || "",
   laneSingles: participant?.lanes?.singles || "",
-  avgEntering: participant?.averages?.entering ?? "",
-  avgHandicap: participant?.averages?.handicap ?? "",
+  avgEntering: participant?.bookAverage ?? participant?.averages?.entering ?? "",
   teamScores: participant?.scores?.team || DEFAULT_SCORES,
   doublesScores: participant?.scores?.doubles || DEFAULT_SCORES,
   singlesScores: participant?.scores?.singles || DEFAULT_SCORES,
@@ -48,6 +48,7 @@ const toNumberOrNull = (value) => {
 const buildPayload = (formState) => ({
   firstName: formState.firstName,
   lastName: formState.lastName,
+  nickname: formState.nickname,
   email: formState.email,
   phone: formState.phone,
   birthMonth: toNumberOrNull(formState.birthMonth),
@@ -55,6 +56,7 @@ const buildPayload = (formState) => ({
   city: formState.city,
   region: formState.region,
   country: formState.country,
+  bookAverage: toNumberOrNull(formState.avgEntering),
   team: { tnmtId: formState.tnmtId, name: formState.teamName },
   doubles: { did: formState.doublesId, partnerPid: formState.partnerPid },
   lanes: {
@@ -64,7 +66,6 @@ const buildPayload = (formState) => ({
   },
   averages: {
     entering: toNumberOrNull(formState.avgEntering),
-    handicap: toNumberOrNull(formState.avgHandicap),
   },
   scores: {
     team: formState.teamScores.map(toNumberOrNull).filter((v) => v !== null),

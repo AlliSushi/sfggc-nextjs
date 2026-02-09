@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { toTeamSlug } from "../../../utils/portal/slug.js";
+import TeamLinks from "../TeamLinks/TeamLinks.js";
 
 const SCORE_SECTIONS = [
   { label: "Team scores", field: "teamScores" },
@@ -33,12 +33,21 @@ const ParticipantEditForm = ({ formState, onFieldChange, onScoreChange }) => {
         label="First name"
         value={formState.firstName}
         onChange={onFieldChange("firstName")}
+        colClass="col-12 col-md-4"
       />
       <FormField
         id="last-name"
         label="Last name"
         value={formState.lastName}
         onChange={onFieldChange("lastName")}
+        colClass="col-12 col-md-4"
+      />
+      <FormField
+        id="nickname"
+        label="Nickname"
+        value={formState.nickname}
+        onChange={onFieldChange("nickname")}
+        colClass="col-12 col-md-4"
       />
       <FormField
         id="email"
@@ -104,22 +113,11 @@ const ParticipantEditForm = ({ formState, onFieldChange, onScoreChange }) => {
         value={formState.tnmtId}
         onChange={onFieldChange("tnmtId")}
       />
-      {teamSlug && (
-        <div className="col-12">
-          <div className="small text-muted">
-            <Link href={`/portal/team/${teamSlug}`}>{formState.teamName}</Link>
-            {formState.tnmtId ? (
-              <>
-                {" "}
-                ·{" "}
-                <Link href={`/portal/team/${teamSlug}`}>
-                  Team ID {formState.tnmtId}
-                </Link>
-              </>
-            ) : null}
-          </div>
-        </div>
-      )}
+      <TeamLinks
+        teamSlug={teamSlug}
+        teamName={formState.teamName}
+        tnmtId={formState.tnmtId}
+      />
 
       <FormField
         id="doubles-id"
@@ -166,19 +164,11 @@ const ParticipantEditForm = ({ formState, onFieldChange, onScoreChange }) => {
       </div>
 
       <div className="col-12 col-md-6">
-        <label className="form-label">Entering average</label>
+        <label className="form-label">Book Average</label>
         <input
           className="form-control"
           value={formState.avgEntering}
           onChange={onFieldChange("avgEntering")}
-        />
-      </div>
-      <div className="col-12 col-md-6">
-        <label className="form-label">Handicap</label>
-        <input
-          className="form-control"
-          value={formState.avgHandicap}
-          onChange={onFieldChange("avgHandicap")}
         />
       </div>
 

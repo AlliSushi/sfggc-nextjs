@@ -35,7 +35,7 @@ const ParticipantProfile = ({
         <div className="d-flex flex-column flex-md-row justify-content-between">
           <div>
             <h2 className="h4 mb-1">
-              {participant.firstName} {participant.lastName}
+              {participant.nickname || participant.firstName} {participant.lastName}
             </h2>
             {showAdminDetails && <p className="mb-2">PID {participant.pid}</p>}
           </div>
@@ -126,7 +126,7 @@ const ParticipantProfile = ({
           <div className="col-12 col-md-4">
             <h3 className="h6">Averages</h3>
             <p className="mb-1">
-              Entering: {participant.averages?.entering ?? "—"}
+              Book Average: {participant.bookAverage ?? "—"}
             </p>
             <p className="mb-0">
               Handicap: {participant.averages?.handicap ?? "—"}

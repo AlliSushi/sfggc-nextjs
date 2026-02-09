@@ -47,7 +47,10 @@ const AdminDashboardPage = () => {
               pid: row.pid,
               firstName: row.first_name,
               lastName: row.last_name,
+              nickname: row.nickname,
               email: row.email,
+              bookAverage: row.book_average,
+              handicap: row.handicap,
               team: {
                 name: row.team_name,
               },
@@ -114,7 +117,10 @@ const AdminDashboardPage = () => {
               <tr>
                 <th>PID</th>
                 <th>Name</th>
+                <th>Nickname</th>
                 <th>Email</th>
+                <th>Book Average</th>
+                <th>Handicap</th>
                 <th>Team</th>
                 <th>Preview</th>
               </tr>
@@ -128,7 +134,10 @@ const AdminDashboardPage = () => {
                       {participant.firstName} {participant.lastName}
                     </Link>
                   </td>
+                  <td>{participant.nickname || "—"}</td>
                   <td>{participant.email || "—"}</td>
+                  <td>{participant.bookAverage || "—"}</td>
+                  <td>{participant.handicap ?? "—"}</td>
                   <td>
                     {participant.team?.name ? (
                       <Link
@@ -152,7 +161,7 @@ const AdminDashboardPage = () => {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center text-muted">
+                  <td colSpan={8} className="text-center text-muted">
                     No participants match that search.
                   </td>
                 </tr>
