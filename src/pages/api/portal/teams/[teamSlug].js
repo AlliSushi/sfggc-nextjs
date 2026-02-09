@@ -3,9 +3,8 @@ import { toTeamSlug } from "../../../../utils/portal/slug.js";
 import { getAuthSessions } from "../../../../utils/portal/auth-guards.js";
 import { forbidden, methodNotAllowed, unauthorized } from "../../../../utils/portal/http.js";
 import { filterNonNull } from "../../../../utils/portal/array-helpers.js";
-
-const buildName = (person) =>
-  `${person.first_name || ""} ${person.last_name || ""}`.trim();
+import { buildDisplayName } from "../../../../utils/portal/name-helpers.js";
+import { EVENT_TYPES } from "../../../../utils/portal/event-constants.js";
 
 
 const sortByTeamOrder = (a, b) => {
@@ -112,50 +111,46 @@ const resolveParticipantTeamSlug = async (pid) => {
   return team.slug || (team.team_name ? toTeamSlug(team.team_name) : null);
 };
 
-export default async function handler(req, res) {
-  const { teamSlug } = req.query;
+const authenticateRequest = (req, res) => {
+  const { adminSession, participantSession } = getAuthSessions(req);
+  if (!adminSession && !participantSession) {
+    unauthorized(res);
+    return null;
+  }
+  return { adminSession, participantSession };
+};
 
-  try {
-    if (req.method !== "GET") {
-      methodNotAllowed(req, res, ["GET"]);
-      return;
-    }
+const authorizeParticipant = async (teamSlug, participantSession, res) => {
+  if (!participantSession) {
+    return true;
+  }
+  const participantTeamSlug = await resolveParticipantTeamSlug(participantSession.pid);
+  const normalizedRequest = toTeamSlug(teamSlug || "");
+  const allowedSlugs = new Set(
+    [participantTeamSlug, toTeamSlug(participantTeamSlug || "")].filter(Boolean)
+  );
+  if (!participantTeamSlug || !allowedSlugs.has(normalizedRequest)) {
+    forbidden(res);
+    return false;
+  }
+  return true;
+};
 
-    const { adminSession, participantSession } = getAuthSessions(req);
-    if (!adminSession && !participantSession) {
-      unauthorized(res);
-      return;
-    }
-    if (participantSession) {
-      const participantTeamSlug = await resolveParticipantTeamSlug(
-        participantSession.pid
-      );
-      const normalizedRequest = toTeamSlug(teamSlug || "");
-      const allowedSlugs = new Set(
-        [participantTeamSlug, toTeamSlug(participantTeamSlug || "")]
-          .filter(Boolean)
-      );
-      if (!participantTeamSlug || !allowedSlugs.has(normalizedRequest)) {
-        forbidden(res);
-        return;
-      }
-    }
+const fetchTeamBySlug = async (teamSlug) => {
+  const { rows: teams } = await query("select * from teams");
+  return teams?.find(
+    (row) => row.slug === teamSlug || toTeamSlug(row.team_name) === teamSlug
+  );
+};
 
-    const { rows: teams } = await query("select * from teams");
-    const team = teams?.find(
-      (row) => row.slug === teamSlug || toTeamSlug(row.team_name) === teamSlug
-    );
-    if (!team) {
-      res.status(404).json({ error: "Team not found." });
-      return;
-    }
-
-    const { rows: members } = await query(
-      `
+const fetchTeamMembers = async (tnmtId) => {
+  const { rows: members } = await query(
+    `
       select
         p.pid,
         p.first_name,
         p.last_name,
+        p.nickname,
         p.city,
         p.region,
         p.country,
@@ -171,35 +166,74 @@ export default async function handler(req, res) {
         s.game3 as team_game3
       from people p
       left join doubles_pairs d on d.pid = p.pid
-      left join scores s on s.pid = p.pid and s.event_type = 'team'
+      left join scores s on s.pid = p.pid and s.event_type = ?
       where p.tnmt_id = ?
       `,
-      [team.tnmt_id]
-    );
+    [EVENT_TYPES.TEAM, tnmtId]
+  );
+  return members;
+};
 
+const resolveTeamLocation = (members) => {
+  return (
+    members.find(
+      (member) => member.team_captain && (member.city || member.region || member.country)
+    ) ||
+    members.find((member) => member.city || member.region || member.country) ||
+    null
+  );
+};
+
+const extractTeamScores = (members) => {
+  const scoreSource = members.find(
+    (m) => m.team_game1 != null || m.team_game2 != null || m.team_game3 != null
+  );
+  return scoreSource
+    ? filterNonNull([scoreSource.team_game1, scoreSource.team_game2, scoreSource.team_game3])
+    : [];
+};
+
+const buildRosterResponse = (members) => {
+  return members.map((member) => ({
+    pid: member.pid,
+    name: buildDisplayName(member),
+    isCaptain: Boolean(member.team_captain),
+    teamOrder: member.team_order,
+    doublesPartnerPid: member.partner?.pid || "",
+    doublesPartnerName: member.partner ? buildDisplayName(member.partner) : "",
+  }));
+};
+
+export default async function handler(req, res) {
+  const { teamSlug } = req.query;
+
+  try {
+    if (req.method !== "GET") {
+      methodNotAllowed(req, res, ["GET"]);
+      return;
+    }
+
+    const sessions = authenticateRequest(req, res);
+    if (!sessions) {
+      return;
+    }
+
+    const authorized = await authorizeParticipant(teamSlug, sessions.participantSession, res);
+    if (!authorized) {
+      return;
+    }
+
+    const team = await fetchTeamBySlug(teamSlug);
+    if (!team) {
+      res.status(404).json({ error: "Team not found." });
+      return;
+    }
+
+    const members = await fetchTeamMembers(team.tnmt_id);
     const orderedMembers = orderRoster(members);
-    const locationSource =
-      orderedMembers.find(
-        (member) => member.team_captain && (member.city || member.region || member.country)
-      ) ||
-      orderedMembers.find((member) => member.city || member.region || member.country) ||
-      null;
-
-    const orderedRoster = orderedMembers.map((member) => ({
-      pid: member.pid,
-      name: buildName(member),
-      isCaptain: Boolean(member.team_captain),
-      teamOrder: member.team_order,
-      doublesPartnerPid: member.partner?.pid || "",
-      doublesPartnerName: member.partner ? buildName(member.partner) : "",
-    }));
-
-    const scoreSource = orderedMembers.find(
-      (m) => m.team_game1 != null || m.team_game2 != null || m.team_game3 != null
-    );
-    const teamScores = scoreSource
-      ? filterNonNull([scoreSource.team_game1, scoreSource.team_game2, scoreSource.team_game3])
-      : [];
+    const locationSource = resolveTeamLocation(orderedMembers);
+    const teamScores = extractTeamScores(orderedMembers);
+    const orderedRoster = buildRosterResponse(orderedMembers);
 
     res.status(200).json({
       team: {
