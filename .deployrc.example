@@ -42,7 +42,7 @@ DEPLOY_STATIC_PATH="/home/goldengateclassic/htdocs/www.goldengateclassic.org"
 # ============================================================================
 
 # Path where portal application will be deployed
-DEPLOY_PORTAL_PATH="~/htdocs/www.goldengateclassic.org/portal-app"
+DEPLOY_PORTAL_PATH="/home/goldengateclassic/htdocs/www.goldengateclassic.org/portal-app"
 
 # PM2 process name for the portal app
 DEPLOY_PM2_APP_NAME="sfggc-portal"

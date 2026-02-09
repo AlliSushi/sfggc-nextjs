@@ -19,6 +19,10 @@ const REQUEST_RESET_API = path.join(
   process.cwd(),
   "src/pages/api/portal/admin/request-reset.js"
 );
+const ADMIN_DETAIL_API = path.join(
+  process.cwd(),
+  "src/pages/api/portal/admins/[id].js"
+);
 const PORTAL_API_TESTS = path.join(
   process.cwd(),
   "tests/unit/portal-api.test.js"
@@ -100,5 +104,58 @@ describe("test fixtures explicit UUID handling", () => {
     // Test INSERT should use uuid() function in SELECT
     assert.match(src, /insert into admin_password_resets \(id, admin_id,/i);
     assert.match(src, /select uuid\(\), id,/i);
+  });
+});
+
+describe("admin edit/delete API explicit UUID handling", () => {
+  test("Given admin edit handler (PATCH), when updating admin and logging action, then admin_actions INSERT includes explicit UUID", () => {
+    const src = fs.readFileSync(ADMIN_DETAIL_API, "utf-8");
+
+    // Should generate UUID for admin action
+    assert.match(src, /const actionId = crypto\.randomUUID\(\)/);
+
+    // Should include id in admin_actions INSERT column list
+    assert.match(src, /insert into admin_actions \(id, admin_email, action, details\)/i);
+
+    // Should provide actionId in values for modify_admin action
+    const patchHandler = src.match(/async function handlePatch[\s\S]*?(?=async function|export default)/);
+    assert.ok(patchHandler, "handlePatch function should exist");
+    assert.match(patchHandler[0], /actionId/);
+    assert.match(patchHandler[0], /modify_admin/);
+  });
+
+  test("Given admin delete handler (DELETE), when revoking admin and logging action, then admin_actions INSERT includes explicit UUID", () => {
+    const src = fs.readFileSync(ADMIN_DETAIL_API, "utf-8");
+
+    // Should generate UUID for admin action
+    assert.match(src, /const actionId = crypto\.randomUUID\(\)/);
+
+    // Should include id in admin_actions INSERT column list
+    assert.match(src, /insert into admin_actions \(id, admin_email, action, details\)/i);
+
+    // Should provide actionId in values for revoke_admin action
+    const deleteHandler = src.match(/async function handleDelete[\s\S]*?(?=export default)/);
+    assert.ok(deleteHandler, "handleDelete function should exist");
+    assert.match(deleteHandler[0], /actionId/);
+    assert.match(deleteHandler[0], /revoke_admin/);
+  });
+
+  test("Given admin edit/delete handlers, when executing transactions, then actionId is generated before transaction starts", () => {
+    const src = fs.readFileSync(ADMIN_DETAIL_API, "utf-8");
+
+    // Extract both handlers
+    const patchHandler = src.match(/async function handlePatch[\s\S]*?(?=async function handleDelete)/);
+    const deleteHandler = src.match(/async function handleDelete[\s\S]*?(?=export default)/);
+
+    assert.ok(patchHandler, "handlePatch should exist");
+    assert.ok(deleteHandler, "handleDelete should exist");
+
+    // PATCH handler should generate actionId before withTransaction
+    const patchBeforeTransaction = patchHandler[0].match(/const actionId = crypto\.randomUUID[\s\S]*?await withTransaction/);
+    assert.ok(patchBeforeTransaction, "PATCH handler should generate actionId before transaction");
+
+    // DELETE handler should generate actionId before withTransaction
+    const deleteBeforeTransaction = deleteHandler[0].match(/const actionId = crypto\.randomUUID[\s\S]*?await withTransaction/);
+    assert.ok(deleteBeforeTransaction, "DELETE handler should generate actionId before transaction");
   });
 });

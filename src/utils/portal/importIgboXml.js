@@ -27,6 +27,33 @@ const toNumber = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+/**
+ * Sanitize phone number by removing invisible Unicode formatting characters.
+ * These characters (like U+202C POP DIRECTIONAL FORMATTING) can cause database
+ * encoding issues on servers with non-utf8mb4 character sets.
+ *
+ * Removes:
+ * - U+200E LEFT-TO-RIGHT MARK
+ * - U+200F RIGHT-TO-LEFT MARK
+ * - U+202A LEFT-TO-RIGHT EMBEDDING
+ * - U+202B RIGHT-TO-LEFT EMBEDDING
+ * - U+202C POP DIRECTIONAL FORMATTING
+ * - U+202D LEFT-TO-RIGHT OVERRIDE
+ * - U+202E RIGHT-TO-LEFT OVERRIDE
+ * - U+2066 LEFT-TO-RIGHT ISOLATE
+ * - U+2067 RIGHT-TO-LEFT ISOLATE
+ * - U+2068 FIRST STRONG ISOLATE
+ * - U+2069 POP DIRECTIONAL ISOLATE
+ * - U+FEFF ZERO WIDTH NO-BREAK SPACE (BOM)
+ */
+const sanitizePhone = (value) => {
+  const str = toText(value);
+  if (!str) return "";
+
+  // Remove invisible Unicode formatting characters
+  return str.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "");
+};
+
 const parsePeople = (xmlText) => {
   const parser = new XMLParser({ ignoreAttributes: false });
   const data = parser.parse(xmlText);
@@ -59,7 +86,7 @@ const buildImportRows = (people) => {
     const firstName = toText(person.FIRST_NAME);
     const lastName = toText(person.LAST_NAME);
     const email = toText(person.EMAIL);
-    const phone = toText(person.PHONE_1 || person.PHONE);
+    const phone = sanitizePhone(person.PHONE_1 || person.PHONE);
     const birthMonth = toNumber(person.BIRTH_MONTH);
     const birthDay = toNumber(person.BIRTH_DAY);
     const city = toText(person.CITY);

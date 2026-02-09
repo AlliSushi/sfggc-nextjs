@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { query, withTransaction } from "../../../../utils/portal/db.js";
 import {
   ensureAdminActionsTables,
@@ -72,6 +73,7 @@ async function handlePatch(req, res) {
   const newPhone = phone !== undefined ? phone.trim() : current.phone || "";
   const newName = `${newFirstName} ${newLastName}`.trim();
 
+  const actionId = crypto.randomUUID();
   await withTransaction(async (connQuery) => {
     await connQuery(
       `update admins
@@ -80,8 +82,9 @@ async function handlePatch(req, res) {
       [newFirstName, newLastName, newEmail || null, newPhone || null, newRole, newName, id]
     );
     await connQuery(
-      "INSERT INTO admin_actions (admin_email, action, details) VALUES (?, ?, ?)",
+      "INSERT INTO admin_actions (id, admin_email, action, details) VALUES (?, ?, ?, ?)",
       [
+        actionId,
         payload.email,
         "modify_admin",
         JSON.stringify({
@@ -141,12 +144,14 @@ async function handleDelete(req, res) {
     }
   }
 
+  const actionId = crypto.randomUUID();
   await withTransaction(async (connQuery) => {
     await connQuery("DELETE FROM admin_password_resets WHERE admin_id = ?", [id]);
     await connQuery("DELETE FROM admins WHERE id = ?", [id]);
     await connQuery(
-      "INSERT INTO admin_actions (admin_email, action, details) VALUES (?, ?, ?)",
+      "INSERT INTO admin_actions (id, admin_email, action, details) VALUES (?, ?, ?, ?)",
       [
+        actionId,
         payload.email,
         "revoke_admin",
         JSON.stringify({
