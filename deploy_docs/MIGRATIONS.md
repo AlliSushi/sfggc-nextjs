@@ -282,6 +282,50 @@ Adds unique constraint on `scores(pid, event_type)` to enable idempotent XML imp
 - Book average and handicap calculation (`portal_architecture.md#book-average-and-handicap-management`)
 - Scores table architecture (`portal_database_architecture.md#scores-table-book-average-and-handicap`)
 
+### add-sessions-revoked-at.sh
+
+Adds session revocation timestamp column to enable immediate invalidation of all admin sessions for security breach scenarios.
+
+**What it does:**
+- Checks if `sessions_revoked_at` column already exists in `admins` table
+- Adds `sessions_revoked_at TIMESTAMP NULL` column after `must_change_password`
+- No data migration needed (defaults to NULL)
+- Idempotent (safe to run multiple times)
+
+**Why needed:**
+- Force password change feature requires immediate session invalidation
+- When admin credentials compromised, need to revoke ALL active sessions
+- Setting timestamp invalidates all sessions created before that time
+- Auth guards check this timestamp on every authenticated request
+
+**How it works:**
+1. Super admin forces password change on compromised account
+2. Backend sets `sessions_revoked_at = NOW()`
+3. All sessions created before this timestamp become invalid
+4. Admin must log in with new password to create valid session
+
+**Column details:**
+- **Type**: `TIMESTAMP NULL`
+- **Default**: `NULL` (all sessions valid)
+- **Location**: After `must_change_password` column
+- **Usage**: Set to `NOW()` when forcing password change
+
+**Performance impact**:
+- Every authenticated admin request queries this column
+- Query: `SELECT sessions_revoked_at FROM admins WHERE email = ? LIMIT 1`
+- Indexed lookup via email unique constraint (fast)
+- Latency: 1-10ms local, 5-30ms RDS
+- Current impact: LOW (5-10 concurrent admins typical)
+
+**Migration script location:** `backend/scripts/migrations/add-sessions-revoked-at.sh`
+
+**Test:** `tests/unit/migrations/add-sessions-revoked-at.test.js` (BDD tests)
+
+**Related features:**
+- Force password change (`portal_architecture.md#force-password-change`)
+- Session revocation system (`portal_database_architecture.md#admins-table-session-revocation`)
+- Performance considerations (`portal_architecture.md#performance-considerations`)
+
 ## Migration Lifecycle
 
 ```

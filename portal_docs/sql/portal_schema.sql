@@ -9,6 +9,8 @@ create table if not exists admins (
   phone varchar(64) unique,
   password_hash text,
   role varchar(64) not null default 'super-admin',
+  must_change_password boolean default false,
+  sessions_revoked_at timestamp null,
   created_at timestamp default current_timestamp
 );
 
@@ -61,6 +63,14 @@ create table if not exists scores (
 
 create unique index if not exists scores_pid_event_unique
   on scores (pid, event_type);
+
+-- Performance indexes for foreign key columns used in WHERE clauses and JOINs
+create index if not exists idx_people_tnmt_id on people(tnmt_id);
+create index if not exists idx_people_did on people(did);
+create index if not exists idx_doubles_pairs_pid on doubles_pairs(pid);
+create index if not exists idx_doubles_pairs_partner_pid on doubles_pairs(partner_pid);
+create index if not exists idx_scores_pid on scores(pid);
+create index if not exists idx_admins_phone on admins(phone);
 
 create table if not exists audit_logs (
   id char(36) primary key,
