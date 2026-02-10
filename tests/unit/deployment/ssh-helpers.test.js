@@ -43,8 +43,8 @@ test(
 
     // Executes SSH
     assert.ok(
-      content.includes('ssh "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" "$command"'),
-      "ssh_command must execute ssh with user@host and command"
+      content.includes('ssh -n "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" "$command"'),
+      "ssh_command must execute ssh -n with user@host and command (-n prevents stdin consumption in loops)"
     );
   }
 );

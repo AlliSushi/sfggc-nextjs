@@ -13,7 +13,7 @@ ssh_command() {
     return 0  # Simulate success
   fi
 
-  ssh "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" "$command"
+  ssh -n "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" "$command"
 }
 
 # scp_file - Copy file to server (respects dry-run)

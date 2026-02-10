@@ -911,3 +911,22 @@ test(
     );
   }
 );
+
+// ─── MEDIUM: SSH stdin consumption bug ──────────────────────────────────────
+
+test(
+  "Given ssh_command function, when used in loops, then ssh uses -n flag to prevent stdin consumption",
+  () => {
+    const content = readFile("deploy_scripts/lib/ssh.sh");
+    const funcMatch = content.match(/ssh_command\(\) \{[\s\S]*?^}/m);
+    assert.ok(funcMatch, "ssh_command function must exist");
+    const funcBody = funcMatch[0];
+
+    // ssh must use -n flag to avoid consuming stdin from calling loops
+    // Without -n, ssh inside a while-read loop eats the remaining stdin
+    assert.ok(
+      funcBody.match(/ssh\s[^"]*-n/) || funcBody.match(/ssh\s+-n\b/),
+      "ssh_command must use -n flag to prevent stdin consumption in loops"
+    );
+  }
+);
