@@ -13,23 +13,17 @@ import { EVENT_TYPES } from "../../../../utils/portal/event-constants.js";
 const buildParticipantsQuery = (search = null) => {
   const baseQuery = `
     select p.pid, p.first_name, p.last_name, p.nickname, p.email, t.team_name,
-      coalesce(
-        (select entering_avg from scores where pid = p.pid and event_type = ? limit 1),
-        (select entering_avg from scores where pid = p.pid and event_type = ? limit 1),
-        (select entering_avg from scores where pid = p.pid and event_type = ? limit 1)
-      ) as book_average,
-      coalesce(
-        (select handicap from scores where pid = p.pid and event_type = ? limit 1),
-        (select handicap from scores where pid = p.pid and event_type = ? limit 1),
-        (select handicap from scores where pid = p.pid and event_type = ? limit 1)
-      ) as handicap
+      coalesce(st.entering_avg, sd.entering_avg, ss.entering_avg) as book_average,
+      coalesce(st.handicap, sd.handicap, ss.handicap) as handicap
     from people p
     left join teams t on p.tnmt_id = t.tnmt_id
     left join admins a on p.pid = a.pid
+    left join scores st on st.pid = p.pid and st.event_type = ?
+    left join scores sd on sd.pid = p.pid and sd.event_type = ?
+    left join scores ss on ss.pid = p.pid and ss.event_type = ?
     where a.pid is null`;
 
   const eventTypeParams = [
-    EVENT_TYPES.TEAM, EVENT_TYPES.DOUBLES, EVENT_TYPES.SINGLES,
     EVENT_TYPES.TEAM, EVENT_TYPES.DOUBLES, EVENT_TYPES.SINGLES,
   ];
 
