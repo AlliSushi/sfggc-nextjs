@@ -98,6 +98,10 @@ setup_portal_environment() {
     fi
     read -sp "  Database password: " DB_PASS
     echo ""
+    if [ -z "$DB_PASS" ]; then
+      log_error "Database password cannot be empty"
+      return 1
+    fi
   else
     log_info "Database password: (from DEPLOY_DB_PASSWORD env var)"
   fi
@@ -124,6 +128,10 @@ setup_portal_environment() {
     fi
     read -sp "  SMTP password (AWS SES): " SMTP_PASS
     echo ""
+    if [ -z "$SMTP_PASS" ]; then
+      log_error "SMTP password cannot be empty"
+      return 1
+    fi
   else
     log_info "SMTP password: (from DEPLOY_SMTP_PASSWORD env var)"
   fi
@@ -231,6 +239,10 @@ create_super_admin() {
         return 1
       fi
       read -p "  Admin email: " ADMIN_EMAIL
+      if [ -z "$ADMIN_EMAIL" ]; then
+        log_error "Admin email cannot be empty"
+        return 1
+      fi
     else
       log_info "Admin email: $ADMIN_EMAIL (from DEPLOY_ADMIN_EMAIL env var)"
     fi
@@ -242,6 +254,10 @@ create_super_admin() {
         return 1
       fi
       read -p "  Admin full name: " ADMIN_NAME
+      if [ -z "$ADMIN_NAME" ]; then
+        log_error "Admin name cannot be empty"
+        return 1
+      fi
     else
       log_info "Admin name: $ADMIN_NAME (from DEPLOY_ADMIN_NAME env var)"
     fi
@@ -254,6 +270,10 @@ create_super_admin() {
       fi
       read -sp "  Admin password: " ADMIN_PASSWORD
       echo ""
+      if [ -z "$ADMIN_PASSWORD" ]; then
+        log_error "Admin password cannot be empty"
+        return 1
+      fi
     else
       log_info "Admin password: (from DEPLOY_ADMIN_PASSWORD env var)"
     fi
@@ -452,7 +472,7 @@ verify_portal_deployment() {
 
   # Test HTTP response (if domain configured)
   if command -v curl >/dev/null 2>&1 && [ -n "${DEPLOY_DOMAIN:-}" ]; then
-    local response=$(curl -s -o /dev/null -w "%{http_code}" "https://${DEPLOY_DOMAIN}/portal/" 2>/dev/null || echo "000")
+    local response=$(curl -s -L -o /dev/null -w "%{http_code}" "https://${DEPLOY_DOMAIN}/portal/" 2>/dev/null || echo "000")
     if [ "$response" = "200" ]; then
       log_success "Portal is responding: https://${DEPLOY_DOMAIN}/portal/"
     else

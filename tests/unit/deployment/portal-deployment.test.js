@@ -794,3 +794,120 @@ test(
     );
   }
 );
+
+// ─── CRITICAL: Empty credential validation ──────────────────────────────────
+
+test(
+  "Given setup_portal_environment function, when database password is read interactively, then it rejects empty input",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+
+    // Extract setup_portal_environment function body
+    const funcMatch = content.match(
+      /setup_portal_environment\(\) \{[\s\S]*?^}/m
+    );
+    assert.ok(funcMatch, "setup_portal_environment function must exist");
+    const funcBody = funcMatch[0];
+
+    // After reading DB_PASS, there must be a check for empty value
+    // The read command is: read -sp "  Database password: " DB_PASS
+    // Immediately after, there should be a guard: if [ -z "$DB_PASS" ]
+    assert.ok(
+      funcBody.includes('read -sp') &&
+      funcBody.match(/read -sp.*DB_PASS[\s\S]{0,80}-z.*DB_PASS/),
+      "setup_portal_environment must validate DB_PASS is non-empty after read"
+    );
+  }
+);
+
+test(
+  "Given setup_portal_environment function, when SMTP password is read interactively, then it rejects empty input",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+    const funcMatch = content.match(
+      /setup_portal_environment\(\) \{[\s\S]*?^}/m
+    );
+    assert.ok(funcMatch, "setup_portal_environment function must exist");
+    const funcBody = funcMatch[0];
+
+    // After reading SMTP_PASS, there must be a check for empty value
+    assert.ok(
+      funcBody.match(/read -sp.*SMTP_PASS[\s\S]{0,80}-z.*SMTP_PASS/),
+      "setup_portal_environment must validate SMTP_PASS is non-empty after read"
+    );
+  }
+);
+
+test(
+  "Given create_super_admin function, when admin email is read interactively, then it rejects empty input",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+    const funcMatch = content.match(
+      /create_super_admin\(\) \{[\s\S]*?^}/m
+    );
+    assert.ok(funcMatch, "create_super_admin function must exist");
+    const funcBody = funcMatch[0];
+
+    // After reading ADMIN_EMAIL, there must be a check for empty value
+    assert.ok(
+      funcBody.match(/read -p.*ADMIN_EMAIL[\s\S]{0,80}-z.*ADMIN_EMAIL/),
+      "create_super_admin must validate ADMIN_EMAIL is non-empty after read"
+    );
+  }
+);
+
+test(
+  "Given create_super_admin function, when admin name is read interactively, then it rejects empty input",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+    const funcMatch = content.match(
+      /create_super_admin\(\) \{[\s\S]*?^}/m
+    );
+    assert.ok(funcMatch, "create_super_admin function must exist");
+    const funcBody = funcMatch[0];
+
+    // After reading ADMIN_NAME, there must be a check for empty value
+    assert.ok(
+      funcBody.match(/read -p.*ADMIN_NAME[\s\S]{0,80}-z.*ADMIN_NAME/),
+      "create_super_admin must validate ADMIN_NAME is non-empty after read"
+    );
+  }
+);
+
+test(
+  "Given create_super_admin function, when admin password is read interactively, then it rejects empty input",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+    const funcMatch = content.match(
+      /create_super_admin\(\) \{[\s\S]*?^}/m
+    );
+    assert.ok(funcMatch, "create_super_admin function must exist");
+    const funcBody = funcMatch[0];
+
+    // After reading ADMIN_PASSWORD, there must be a check for empty value
+    assert.ok(
+      funcBody.match(/read -sp.*ADMIN_PASSWORD[\s\S]{0,80}-z.*ADMIN_PASSWORD/),
+      "create_super_admin must validate ADMIN_PASSWORD is non-empty after read"
+    );
+  }
+);
+
+// ─── HIGH: Health check redirect handling ───────────────────────────────────
+
+test(
+  "Given verify_portal_deployment function, when curl checks portal, then it follows HTTP redirects",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+    const funcMatch = content.match(
+      /verify_portal_deployment\(\) \{[\s\S]*?^}/m
+    );
+    assert.ok(funcMatch, "verify_portal_deployment function must exist");
+    const funcBody = funcMatch[0];
+
+    // curl must use -L flag to follow redirects (HTTP 301/302/308)
+    assert.ok(
+      funcBody.match(/curl\s[^"]*-L/) || funcBody.match(/curl\s[^"]*--location/),
+      "verify_portal_deployment curl must use -L (follow redirects) flag"
+    );
+  }
+);
