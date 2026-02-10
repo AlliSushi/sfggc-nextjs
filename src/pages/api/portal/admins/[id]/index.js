@@ -29,7 +29,13 @@ async function handleGet(req, res) {
     return;
   }
 
-  res.status(200).json(admin);
+  const { rows: countRows } = await query(
+    "select COUNT(*) as cnt from admins where role = ?",
+    [ROLE_SUPER_ADMIN]
+  );
+  const superAdminCount = countRows[0].cnt;
+
+  res.status(200).json({ ...admin, superAdminCount });
 }
 
 async function handlePatch(req, res) {

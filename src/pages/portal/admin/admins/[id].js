@@ -412,20 +412,13 @@ export const getServerSideProps = async ({ params, req }) => {
       return { notFound: true };
     }
     const admin = await response.json();
-
-    const listResponse = await fetch(`${baseUrl}/api/portal/admins`, {
-      headers: { cookie: req.headers.cookie || "" },
-    });
-    const admins = listResponse.ok ? await listResponse.json() : [];
-    const superAdminCount = Array.isArray(admins)
-      ? admins.filter((a) => a.role === "super-admin").length
-      : 0;
+    const { superAdminCount, ...adminData } = admin;
 
     return {
       props: {
         ...ssrResult.props,
-        admin,
-        superAdminCount,
+        admin: adminData,
+        superAdminCount: superAdminCount || 0,
       },
     };
   } catch (error) {
