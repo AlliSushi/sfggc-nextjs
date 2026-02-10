@@ -84,8 +84,9 @@ sync_static_files() {
     return 0
   fi
 
-  # Use rsync with --delete to remove old files
-  local rsync_cmd="rsync -avz --delete out/ ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${DEPLOY_STATIC_PATH}/"
+  # Use rsync with --delete to remove old files, but protect portal-app/
+  # which lives inside DEPLOY_STATIC_PATH and contains .env.local with secrets
+  local rsync_cmd="rsync -avz --delete --exclude='portal-app' out/ ${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}:${DEPLOY_STATIC_PATH}/"
 
   if [ "${VERBOSE:-false}" = true ]; then
     log_file_count "out"

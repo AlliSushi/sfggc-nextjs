@@ -509,3 +509,26 @@ test(
     );
   }
 );
+
+// ─── CRITICAL: Static rsync must not delete portal-app/ ─────────────────────
+
+test(
+  "Given sync_static_files function, when rsync uses --delete, then it excludes portal-app/ to protect portal deployment",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-static.sh");
+    const funcMatch = content.match(
+      /sync_static_files\(\) \{[\s\S]*?^}/m
+    );
+    assert.ok(funcMatch, "sync_static_files function must exist");
+    const funcBody = funcMatch[0];
+
+    // rsync --delete must exclude portal-app/ to prevent deleting
+    // the portal application directory (including .env.local)
+    assert.ok(
+      funcBody.includes("--exclude='portal-app'") ||
+      funcBody.includes('--exclude="portal-app"') ||
+      funcBody.includes("--exclude=portal-app"),
+      "sync_static_files rsync must exclude portal-app/ from --delete to protect portal deployment"
+    );
+  }
+);
