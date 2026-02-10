@@ -27,7 +27,9 @@ const ParticipantEditForm = ({ formState, onFieldChange, onScoreChange }) => {
   const teamSlug = formState.teamName ? toTeamSlug(formState.teamName) : "";
 
   return (
-    <form className="row g-3 portal-edit-form">
+    <section className="card">
+      <div className="card-body">
+        <form className="row g-3 portal-edit-form">
       <FormField
         id="first-name"
         label="First name"
@@ -192,7 +194,9 @@ const ParticipantEditForm = ({ formState, onFieldChange, onScoreChange }) => {
           </div>
         </div>
       ))}
-    </form>
+        </form>
+      </div>
+    </section>
   );
 };
 
