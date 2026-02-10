@@ -351,6 +351,79 @@ When reviewing changes that could impact performance:
 | Date | Change | Impact | Notes |
 |------|--------|--------|-------|
 | 2026-02-09 | Added session revocation checks | +5-15ms per admin request | Acceptable for security benefit |
+| 2026-02-09 | Team lookup: WHERE slug = ? | ~500ms-1s saved | Was fetching all teams then filtering in JS |
+| 2026-02-09 | Remove useEffect dep bloat | ~200-500ms saved | showMakeAdmin/showRevokeAdmin triggered redundant fetches |
+| 2026-02-09 | compress: false in next.config.js | ~50-100ms saved | Avoids double-compression with nginx |
+| 2026-02-09 | Foreign key indexes migration | ~200-500ms saved | Indexes on people, doubles_pairs, scores, admins |
+| 2026-02-09 | Remove acquireTimeout pool option | Eliminates deprecation warning | Not supported by mysql2 |
+
+## Remaining Performance Optimization Plan
+
+These items were identified during the 2026-02-09 performance audit. They require more effort than the quick wins above and should be implemented via BDD.
+
+### CRITICAL: Participant List N+1 Subqueries
+
+**File:** `src/pages/api/portal/participants/index.js` (lines 14-54)
+
+**Problem:** The participant list API runs 6 correlated subqueries per row to fetch team name, doubles partner, and scores. With 120+ participants, this generates 720+ individual queries per page load.
+
+**Fix:** Replace correlated subqueries with LEFT JOINs:
+```sql
+SELECT p.*, t.team_name, d.partner_pid,
+  st.game1 as team_game1, st.game2 as team_game2, st.game3 as team_game3
+FROM people p
+LEFT JOIN teams t ON t.tnmt_id = p.tnmt_id
+LEFT JOIN doubles_pairs d ON d.pid = p.pid
+LEFT JOIN scores st ON st.pid = p.pid AND st.event_type = 'team'
+```
+
+**Expected improvement:** 500ms-2s (720+ queries reduced to 1)
+
+### HIGH: Admin Detail Page Sequential SSR Fetches
+
+**File:** `src/pages/portal/admin/admins/[id].js` (lines 399-433)
+
+**Problem:** `getServerSideProps` makes 2 sequential API calls: fetch single admin, then fetch ALL admins to count super-admins (for revoke button logic).
+
+**Fix:** Add super-admin count to the single admin endpoint response, or add a lightweight `/api/portal/admins/super-admin-count` endpoint.
+
+**Expected improvement:** 200-500ms (eliminates redundant full admin list fetch)
+
+### MEDIUM: Nginx Upstream Keepalive
+
+**File:** `backend/config/vhost.txt`
+
+**Problem:** Each portal request opens a new TCP connection from nginx to Node.js on port 3000. The `Connection 'upgrade'` header prevents HTTP keepalive between nginx and the backend.
+
+**Fix:** Add upstream block with `keepalive 16` and change `Connection` header to `""`.
+
+**Expected improvement:** 20-50ms per request (reuses TCP connections)
+
+### MEDIUM: Serve /_next/static Directly from Nginx
+
+**File:** `backend/config/vhost.txt` (lines 104-110)
+
+**Problem:** All `/_next/*` requests are proxied through Node.js, even static JS/CSS bundles. Nginx can serve these directly from the `.next/static` directory.
+
+**Fix:** Add `location /_next/static { alias /path/to/portal-app/.next/static; }` before the existing `/_next` proxy block.
+
+**Expected improvement:** 50-200ms for static asset loads
+
+### LOW: PM2 Cluster Mode
+
+**Problem:** PM2 runs in fork mode (single process) on a 2-core server.
+
+**Fix:** Switch to cluster mode with 2 instances via ecosystem.config.js.
+
+**Expected improvement:** Better throughput under concurrent load (not single-request latency)
+
+### Implementation Priority
+
+1. Participant list N+1 — biggest single improvement, purely server-side
+2. Admin detail sequential fetches — straightforward server-side fix
+3. Nginx upstream keepalive — low risk, moderate improvement
+4. Nginx static assets — moderate risk (path config), good improvement
+5. PM2 cluster mode — low priority, helps concurrency not latency
 
 ## Related Documentation
 

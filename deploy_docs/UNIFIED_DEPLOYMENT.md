@@ -98,9 +98,11 @@ DEPLOY_STATIC_PATH="/home/goldengateclassic/htdocs/www.goldengateclassic.org"
 
 #### Portal Application Deployment
 ```bash
-DEPLOY_PORTAL_PATH="~/htdocs/www.goldengateclassic.org/portal-app"
+DEPLOY_PORTAL_PATH="/home/goldengateclassic/htdocs/www.goldengateclassic.org/portal-app"
 DEPLOY_PM2_APP_NAME="sfggc-portal"
 ```
+
+**Important:** Always use full absolute paths (e.g., `/home/username/...`), never tildes (`~`). Tildes are not reliably expanded in non-interactive SSH commands and can cause file existence checks to fail silently.
 
 #### Database Configuration (Portal Only) - NON-SECRET
 ```bash
@@ -139,7 +141,7 @@ Deploys the public-facing website (7 static pages).
 **What it does:**
 1. Builds static site (`npm run build` with `output: 'export'`)
 2. Creates backup of existing deployment on server
-3. Syncs files via rsync with `--delete` flag
+3. Syncs files via rsync with `--delete` flag (excludes `portal-app/` to protect portal deployment)
 4. Generates `.htaccess` for Apache optimization
 5. Verifies deployment
 
@@ -178,9 +180,11 @@ Deploys everything in sequence.
 ```
 
 **What it does:**
-- Runs static deployment first
+- Runs static deployment first (rsync excludes `portal-app/` from `--delete`)
 - Then runs portal deployment
 - Reports status for both
+
+**Important:** The static rsync uses `--delete` to remove stale files from the web root, but explicitly excludes `portal-app/` so that the portal's `.env.local` and other server-only files are preserved.
 
 ---
 
@@ -662,6 +666,49 @@ The deployment script (v1.1+, Feb 2026) now properly separates concerns:
 - `--yes` (or `--force`) only skips the deployment confirmation
 - Credential prompts always work interactively during setup
 - Non-interactive mode (CI/CD) fails fast if environment variables aren't set
+
+### Portal .env.local Deleted After --all Deploy
+
+**Issue:**
+Every `--all` deploy triggers "First-time portal deployment detected" even though you already set up credentials.
+
+**Cause:**
+The static site rsync uses `--delete` to sync the `out/` directory to the web root. If `portal-app/` lives inside the web root and isn't excluded from `--delete`, rsync removes it — including `.env.local` with production credentials. The portal deploy runs second and finds nothing.
+
+**Symptom:**
+```
+First-time portal deployment detected
+Database Configuration:
+  Database password: ********
+```
+
+**Solution:**
+This was fixed in the deployment scripts (Feb 2026). The static rsync now excludes `portal-app/`:
+```bash
+rsync -avz --delete --exclude='portal-app' out/ user@host:$STATIC_PATH/
+```
+
+If you're on an older version, update to the latest. The fix is in `deploy_scripts/lib/deploy-static.sh`.
+
+**Key principle:** When rsync `--delete` syncs to a directory containing subdirectories managed by other deploy steps, those directories must be explicitly excluded.
+
+### Only 1 Migration Runs During Portal Deployment
+
+**Issue:**
+Only the first migration script runs; the rest are silently skipped.
+
+**Cause:**
+The `ssh` command without the `-n` flag reads from stdin. Inside the migration runner's `while read` loop, the first `ssh` call consumes remaining stdin, eating all remaining migration paths.
+
+**Solution:**
+This was fixed in the deployment scripts (Feb 2026). The `ssh_command()` function now uses `ssh -n`:
+```bash
+ssh -n "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" "$command"
+```
+
+If you're on an older version, update to the latest. The fix is in `deploy_scripts/lib/ssh.sh`.
+
+**Key principle:** Always use `ssh -n` when calling ssh inside loops that read from stdin.
 
 ### Node.js Not Found on Server (NVM Users)
 

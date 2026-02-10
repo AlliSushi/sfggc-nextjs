@@ -137,10 +137,8 @@ const authorizeParticipant = async (teamSlug, participantSession, res) => {
 };
 
 const fetchTeamBySlug = async (teamSlug) => {
-  const { rows: teams } = await query("select * from teams");
-  return teams?.find(
-    (row) => row.slug === teamSlug || toTeamSlug(row.team_name) === teamSlug
-  );
+  const { rows } = await query("select * from teams where slug = ?", [teamSlug]);
+  return rows?.[0] || null;
 };
 
 const fetchTeamMembers = async (tnmtId) => {

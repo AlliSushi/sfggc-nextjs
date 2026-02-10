@@ -110,7 +110,7 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
         setLinkedAdmin(data?.admin || null);
       })
       .catch(() => setLinkedAdmin(null));
-  }, [participant?.email, adminRole, showMakeAdmin, showRevokeAdmin]);
+  }, [participant?.email, adminRole]);
 
   useEffect(() => {
     if (!pid || adminRole !== "super-admin") return;

@@ -231,7 +231,27 @@ cd /path/to/project
 ./deploy_scripts/deploy.sh --portal
 ```
 
-### 4. Mixing --setup with Non-Interactive Mode
+### 4. Static Rsync --delete Destroys Portal Directory
+
+**Symptom:** Every `--all` deploy triggers "First-time portal deployment detected."
+
+**Cause:** Static rsync uses `--delete` to sync `out/` to web root. `portal-app/` doesn't exist in `out/`, so rsync deletes it — including `.env.local`.
+
+**Fix applied:** `--exclude='portal-app'` added to static rsync in `deploy-static.sh`.
+
+**Rule:** When rsync `--delete` targets a directory containing subdirectories managed by other deploy steps, those subdirectories MUST be excluded.
+
+### 5. SSH Stdin Consumption Skips Migrations
+
+**Symptom:** Only 1 of N migrations runs during portal deployment.
+
+**Cause:** `ssh` without `-n` reads from stdin. Inside `while read` loops, the first `ssh` call consumes remaining stdin.
+
+**Fix applied:** `ssh -n` in `ssh_command()` function (`lib/ssh.sh`).
+
+**Rule:** Always use `ssh -n` for non-interactive remote commands, especially inside loops.
+
+### 6. Mixing --setup with Non-Interactive Mode
 
 **Error:** Script fails with "Database password required but not provided".
 
@@ -307,8 +327,9 @@ ssh user@server "cd /path/to/portal && node backend/scripts/test-smtp.sh"
 - `lib/ssh.sh` - SSH connection helpers
 - `lib/validation.sh` - Validation checks
 - `lib/build.sh` - Build process
-- `lib/deploy-static.sh` - Static site deployment
+- `lib/deploy-static.sh` - Static site deployment (rsync with `--exclude='portal-app'`)
 - `lib/deploy-portal.sh` - Portal deployment (credentials, database, admin)
+- `lib/deploy-migrations.sh` - Database migration runner (depends on `ssh -n` in ssh.sh)
 
 **Credential prompts (all in `lib/deploy-portal.sh`):**
 - Line 99: Database password (`read -sp`)

@@ -90,13 +90,13 @@ test(
 );
 
 test(
-  "Given the db.js module, when creating connection pool, then acquireTimeout is set to 20000ms",
+  "Given the db.js module, when creating connection pool, then acquireTimeout is NOT used (unsupported by mysql2)",
   () => {
     const content = fs.readFileSync(DB_MODULE_PATH, "utf-8");
 
     assert.ok(
-      content.includes("acquireTimeout") && content.includes("20000"),
-      "Connection pool must have acquireTimeout: 20000 to wait for available connections"
+      !content.includes("acquireTimeout"),
+      "Connection pool must NOT use acquireTimeout (not supported by mysql2, causes deprecation warning)"
     );
   }
 );

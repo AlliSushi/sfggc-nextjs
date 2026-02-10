@@ -40,7 +40,6 @@ const getPool = () => {
     enableKeepAlive: true,         // Keep connections alive for AWS RDS
     keepAliveInitialDelay: 0,      // Send keepalive immediately
     connectTimeout: 20000,         // 20 seconds for slower network conditions
-    acquireTimeout: 20000,         // Wait up to 20s for available connection from pool
   };
 
   if (useSocket) {
