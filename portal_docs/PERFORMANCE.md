@@ -231,7 +231,11 @@ const pool = mysql.createPool({
 ### Query Optimization
 
 **Current Query Patterns**:
-All queries use indexed columns or are already optimized.
+All queries use indexed columns or are already optimized. Key optimizations applied:
+
+- **Participant list (`GET /api/portal/participants`)**: Uses 3 LEFT JOINs on the `scores` table to fetch book_average and handicap per event type in a single query. Previously used 6 correlated subqueries (2 per event type) executed per row.
+- **Admin detail SSR (`getServerSideProps` in `admins/[id].js`)**: The super-admin count is returned in the admin GET endpoint response, eliminating a second API call that previously fetched ALL admin records just to count super-admins.
+- **Team lookup**: Uses `WHERE slug = ?` with indexed column instead of fetching all teams and filtering in JavaScript.
 
 **Future Considerations**:
 - **Audit log pagination**: Add `LIMIT` and `OFFSET` for large datasets
@@ -358,8 +362,59 @@ When reviewing changes that could impact performance:
 | 2026-02-09 | Remove acquireTimeout pool option | Eliminates deprecation warning | Not supported by mysql2 |
 | 2026-02-09 | Participant list: LEFT JOINs replace correlated subqueries | ~500ms-2s saved | 6 subqueries per row eliminated, single query with 3 JOINs |
 | 2026-02-09 | Admin detail: superAdminCount in single API response | ~200-500ms saved | Eliminated redundant fetch of ALL admins in SSR |
+| 2026-02-09 | **Nginx ^~ modifier on portal locations** | **Portal fully broken -> functional** | Without ^~, regex `~* \.(js|css)$` hijacked /_next JS bundles, returning 404s. React could not hydrate. |
 | 2026-02-09 | Nginx upstream keepalive + direct /_next/static serving | ~70-250ms saved | Persistent connections + bypass Node.js for static assets |
-| 2026-02-09 | Deploy admin check: source .env.local | Bug fix | Admin count check was returning 0 due to missing env vars |
+| 2026-02-09 | Deploy admin check: source .env.local with set -a | Bug fix | Admin count check was returning 0 due to unexported env vars |
+
+## Nginx Configuration (Critical for Portal Functionality)
+
+### The ^~ Modifier Requirement
+
+All portal-related nginx `location` blocks MUST use the `^~` prefix modifier. Without it, the portal is completely broken in production.
+
+**The problem**: Nginx evaluates regex locations (`~*`) after prefix locations, regardless of match length. The static site's regex block `location ~* \.(js|css|...)$` matches any URL ending in `.js` or `.css`. This means `/_next/static/chunks/page-abc123.js` is caught by the static asset regex instead of the `/_next` prefix block, returning a 404 because those files do not exist in the static site directory.
+
+**The consequence**: Without `^~`, ALL Next.js JavaScript bundles return 404. React cannot hydrate, `useEffect` hooks never run, and interactive features (admin menus, change log, participant edit forms) are invisible. The pages appear to load but are non-functional.
+
+**The fix**: The `^~` modifier tells nginx "if this prefix matches, stop looking at regex locations."
+
+```nginx
+# CORRECT - ^~ prevents regex override
+location ^~ /portal { ... }
+location ^~ /api/portal { ... }
+location ^~ /_next/static { ... }
+location ^~ /_next { ... }
+
+# WRONG - regex location will override these for .js/.css URLs
+location /portal { ... }
+location /_next { ... }
+```
+
+**All four portal location blocks require ^~:**
+1. `location ^~ /portal` -- portal pages
+2. `location ^~ /api/portal` -- portal API routes
+3. `location ^~ /_next/static` -- build artifacts served from disk
+4. `location ^~ /_next` -- dynamic Next.js requests proxied to Node.js
+
+### Upstream Keepalive
+
+The `upstream portal_backend` block uses `keepalive 16` for persistent connections between nginx and Node.js, saving 20-50ms per request by avoiding TCP handshake overhead. This requires `proxy_set_header Connection ""` (empty string) instead of `Connection 'upgrade'` in all proxied location blocks.
+
+### Direct Disk Serving for /_next/static
+
+The `location ^~ /_next/static` block uses `alias` to serve Next.js build artifacts directly from disk, bypassing Node.js entirely. These files have content hashes in their filenames, so they are cached with `expires 1y` and `Cache-Control: public, immutable`.
+
+```nginx
+location ^~ /_next/static {
+  alias /home/goldengateclassic/htdocs/www.goldengateclassic.org/portal-app/.next/static;
+  expires 1y;
+  add_header Cache-Control "public, immutable";
+}
+```
+
+### Reference Configuration
+
+The authoritative nginx configuration is in `backend/config/vhost.txt`. Changes follow the ISP control panel copy/paste workflow documented in `deploy_docs/DEPLOYMENT.md#nginx-configuration-management`.
 
 ## Remaining Performance Optimization Plan
 

@@ -453,37 +453,57 @@ git push origin main
 
 ### Configuration File Structure
 
-The `backend/config/vhost.txt` file contains three main sections:
+The `backend/config/vhost.txt` file contains four main sections:
 
-**Lines 1-33: Server Block Setup**
+**Upstream Block (before `server {}`):**
+```nginx
+upstream portal_backend {
+  server 127.0.0.1:3000;
+  keepalive 16;   # persistent connections, saves 20-50ms/request
+}
+```
+
+The `keepalive 16` directive maintains persistent connections between nginx and Node.js, avoiding TCP handshake overhead on every request. This requires `proxy_set_header Connection ""` (empty string, not `'upgrade'`) in all proxied location blocks.
+
+**SSL and Server Configuration:**
 - SSL certificates (CloudPanel placeholders)
 - HTTP to HTTPS redirect
 - Basic server settings
 
-**Lines 34-68: Portal Application Proxy** (Critical for portal functionality)
+**Portal Application (CRITICAL -- read the warning below):**
+
+> **WARNING:** All four portal location blocks MUST use the `^~` modifier. Without it, the regex location `~* \.(js|css|...)$` overrides the prefix locations for any URL ending in `.js` or `.css`. This causes ALL Next.js JavaScript bundles to return 404, breaking React hydration and rendering the entire portal non-functional (pages load but interactive elements are invisible).
+
 ```nginx
-# Portal pages (lines 39-49)
-location /portal {
-  proxy_pass http://127.0.0.1:3000;
+# Portal pages -- ^~ prevents regex override
+location ^~ /portal {
+  proxy_pass http://portal_backend;
   # ... proxy headers ...
 }
 
-# Portal API routes (lines 52-59)
-location /api/portal {
-  proxy_pass http://127.0.0.1:3000;
+# Portal API routes
+location ^~ /api/portal {
+  proxy_pass http://portal_backend;
   # ... proxy headers ...
 }
 
-# Next.js assets (lines 62-68)
-location /_next {
-  proxy_pass http://127.0.0.1:3000;
-  # ... caching headers ...
+# Next.js static assets -- served directly from disk (bypasses Node.js)
+location ^~ /_next/static {
+  alias /home/.../portal-app/.next/static;
+  expires 1y;
+  add_header Cache-Control "public, immutable";
+}
+
+# Next.js dynamic requests
+location ^~ /_next {
+  proxy_pass http://portal_backend;
+  # ... proxy headers ...
 }
 ```
 
-**Lines 70-89: Static Site Configuration**
-- Static file serving
-- Caching for images, CSS, JS
+**Static Site Configuration:**
+- `location /` with `try_files` for static pages
+- `location ~*` regex for caching images, CSS, JS (this is the regex that conflicts without `^~`)
 - 404 error handling
 
 ### Common Configuration Tasks
@@ -492,20 +512,18 @@ location /_next {
 No changes needed. The existing `/portal` location block catches all portal routes.
 
 **Change Portal Port:**
-If the Node.js app runs on a different port:
+If the Node.js app runs on a different port, update the `upstream` block (not individual location blocks):
 ```nginx
-# Find all instances of 127.0.0.1:3000
-# Replace with new port (e.g., 127.0.0.1:3001)
-location /portal {
-  proxy_pass http://127.0.0.1:3001;  # Changed from 3000
-  # ...
+upstream portal_backend {
+  server 127.0.0.1:3001;  # Changed from 3000
+  keepalive 16;
 }
 ```
 
 **Add Custom Headers:**
 ```nginx
-location /portal {
-  proxy_pass http://127.0.0.1:3000;
+location ^~ /portal {
+  proxy_pass http://portal_backend;
   # ... existing headers ...
   proxy_set_header X-Custom-Header "value";
 }
@@ -513,13 +531,42 @@ location /portal {
 
 **Increase Timeout for Long Requests:**
 ```nginx
-location /api/portal {
-  proxy_pass http://127.0.0.1:3000;
+location ^~ /api/portal {
+  proxy_pass http://portal_backend;
   # ... existing headers ...
   proxy_read_timeout 300s;
   proxy_connect_timeout 300s;
 }
 ```
+
+**IMPORTANT:** When editing location blocks, always preserve the `^~` modifier. Removing it will break the portal. See the warning in [Configuration File Structure](#configuration-file-structure) above.
+
+### Nginx Proxy Header Inheritance
+
+**Critical Rule:** When you add any `proxy_set_header` directive inside a `location` block, ALL `proxy_set_header` directives inherited from the parent `server` block are lost. Nginx does not merge headers between scopes -- the child block completely replaces the parent's headers.
+
+**What this means in practice:** Every proxy `location` block must explicitly define ALL required headers, even if the parent scope already defines them. You cannot rely on headers "flowing down" from the server-level configuration.
+
+**Required headers for every proxy location:**
+```nginx
+location ^~ /portal {
+    proxy_pass http://portal_backend;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+}
+```
+
+**If you forget even one header:**
+- Missing `Host`: Backend receives wrong hostname, routing fails
+- Missing `X-Real-IP` / `X-Forwarded-For`: Audit logs record `127.0.0.1` instead of the real client IP
+- Missing `X-Forwarded-Proto`: Backend cannot detect HTTPS, may generate insecure URLs
+- Missing `Connection ""`: Keepalive connections to the upstream break
+
+**When adding a new proxy location block,** always copy the full set of `proxy_set_header` directives from an existing working block. Do not assume any headers are inherited.
 
 ### What NOT to Do
 
@@ -545,9 +592,15 @@ sudo vim /etc/nginx/...     # Edit nginx files directly
 3. Check app logs: `ssh server "pm2 logs sfggc-portal"`
 
 **Static Site Works But Portal Doesn't:**
-1. Verify the portal proxy configuration is present (lines 34-68)
+1. Verify the portal proxy configuration is present in `backend/config/vhost.txt`
 2. Check that Node.js app is running (see above)
 3. Test portal URL directly: `curl -v https://domain/portal`
+
+**Portal Pages Load But Menus/Forms Are Missing (No Interactivity):**
+1. Open browser DevTools Network tab and check for 404 errors on `/_next/static/chunks/*.js` files
+2. If JS files return 404, the `^~` modifier is likely missing from the nginx location blocks
+3. Verify all portal location blocks use `^~`: `location ^~ /portal`, `location ^~ /_next/static`, etc.
+4. This is the most common nginx misconfiguration -- see the WARNING in [Configuration File Structure](#configuration-file-structure)
 
 **Changes Not Taking Effect:**
 1. Verify you saved changes in ISP control panel

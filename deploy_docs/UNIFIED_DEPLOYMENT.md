@@ -531,6 +531,73 @@ Portal returns 502 Bad Gateway
 4. See `deploy_docs/PORTAL_DEPLOYMENT.md#7-nginx-configuration`
 5. For ISP-controlled nginx, see `deploy_docs/DEPLOYMENT.md#nginx-configuration-management`
 
+### Portal Pages Load But Are Not Interactive (Missing Menus, Forms, Change Log)
+
+**Issue:**
+Portal pages load and show some content, but interactive elements (admin menus, change log, participant edit forms, dropdowns) are invisible or non-functional.
+
+**Cause:**
+The nginx `^~` modifier is missing from the portal location blocks. Without it, the static site's regex location `~* \.(js|css|...)$` intercepts requests to `/_next/static/chunks/*.js`, returning 404 for all Next.js JavaScript bundles. React cannot hydrate without its client-side JS, so `useEffect` hooks never run and dynamic UI elements never render.
+
+**Diagnosis:**
+1. Open browser DevTools (F12) and check the Network tab
+2. Look for 404 responses on `/_next/static/chunks/*.js` files
+3. Check the Console tab for React hydration errors
+
+**Solution:**
+Verify that all four portal location blocks in `backend/config/vhost.txt` use the `^~` modifier:
+
+```nginx
+location ^~ /portal { ... }
+location ^~ /api/portal { ... }
+location ^~ /_next/static { ... }
+location ^~ /_next { ... }
+```
+
+If any block is missing `^~`, add it, then copy the updated config to the ISP control panel. See `deploy_docs/DEPLOYMENT.md#configuration-file-structure` for the full explanation of why `^~` is required.
+
+### SSR Pages Broken After Nginx Changes (Redirects, 404s, Empty Data)
+
+**Issue:**
+After deploying nginx vhost changes, all server-rendered portal pages break. Participant detail redirects to login, admin detail returns 404, and team pages show empty data -- even though the user has a valid session.
+
+**Cause:**
+`buildBaseUrl(req)` in `src/utils/portal/ssr-helpers.js` used `req.headers.host` to construct the URL for internal SSR API fetches. This created a self-referencing loop: Node.js SSR fetched its own public HTTPS URL, which went through nginx, which proxied back to Node.js. Cloud servers typically cannot connect to their own public IP from localhost (hairpin NAT). Even when the connection succeeds, cookies and forwarded headers may be lost in the round-trip.
+
+**Diagnosis:**
+```bash
+# Direct to Node.js (should return correct data)
+curl -b "session=YOUR_COOKIE" http://localhost:3000/api/portal/participants/12345
+
+# Through nginx (returns {"notFound":true} or redirects)
+curl -b "session=YOUR_COOKIE" https://www.goldengateclassic.org/api/portal/participants/12345
+```
+
+If the direct request succeeds but the nginx request fails, the SSR code is routing through the external URL instead of localhost.
+
+**Solution:**
+`buildBaseUrl()` must always return `http://localhost:${PORT}`. See `SERVER_SETUP.md#troubleshooting-nginx-issues` for the full explanation.
+
+### Nginx Proxy Headers Missing After Adding Custom Header
+
+**Issue:**
+After adding a `proxy_set_header` directive to a location block, the portal starts logging `127.0.0.1` for client IPs, or session validation fails because `X-Forwarded-Proto` is missing.
+
+**Cause:**
+Nginx does not merge `proxy_set_header` directives between parent and child scopes. When ANY `proxy_set_header` is defined in a `location` block, ALL inherited directives from the parent `server` block are silently dropped.
+
+**Solution:**
+Every proxy location block must explicitly include all required headers:
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header Connection "";
+```
+
+When adding a new proxy location, always copy the full header set from an existing working block. See `deploy_docs/DEPLOYMENT.md#nginx-proxy-header-inheritance` for details.
+
 ### First-Time Setup Prompts Don't Appear
 
 **Issue:**
@@ -667,6 +734,38 @@ The deployment script (v1.1+, Feb 2026) now properly separates concerns:
 - Credential prompts always work interactively during setup
 - Non-interactive mode (CI/CD) fails fast if environment variables aren't set
 
+### Deploy Creates Admin Account When Admins Already Exist
+
+**Issue:**
+Script prompts to create a super admin account even though admin accounts already exist in the database.
+
+**Cause:**
+The `create_super_admin()` function runs an inline `node -e` command via SSH to count admin rows. This command needs `PORTAL_DATABASE_URL` from `.env.local`, but `source .env.local` alone does not export variables to child processes (like `node`). Without the database URL, the query silently returns 0.
+
+Additionally, the Node.js comparison operator `!` was causing issues with SSH command escaping.
+
+**Symptoms:**
+```
+No admin accounts found
+Creating super admin account
+  Admin email: ________
+```
+
+Even though you already created an admin during a previous deployment.
+
+**Solution:**
+This was fixed in the deployment scripts (Feb 2026). The `create_super_admin()` function now uses `set -a` before sourcing `.env.local` to auto-export variables, and uses `===` instead of `!` to avoid SSH escaping problems:
+
+```bash
+# Before (broken):
+ssh "cd $PATH && source .env.local && node -e '...'"
+
+# After (fixed):
+ssh "cd $PATH && set -a && source .env.local 2>/dev/null && set +a && node -e '...'"
+```
+
+If you encounter this on an older version, update to the latest deployment scripts.
+
 ### Portal .env.local Deleted After --all Deploy
 
 **Issue:**
@@ -709,6 +808,39 @@ ssh -n "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" "$command"
 If you're on an older version, update to the latest. The fix is in `deploy_scripts/lib/ssh.sh`.
 
 **Key principle:** Always use `ssh -n` when calling ssh inside loops that read from stdin.
+
+### Portal Responses Are Slow or Double-Compressed
+
+**Issue:**
+Portal pages or API responses are unusually large, slow, or occasionally garbled. Browser DevTools may show unexpected `Content-Encoding` headers.
+
+**Cause:**
+The deploy scripts generate a server-mode `next.config.js` on the server during the build step. If this generated config is missing `compress: false`, Node.js compresses responses even though nginx already handles gzip compression. This results in double-compression, which wastes CPU, increases response sizes, and can corrupt binary data.
+
+**Affected files** (deploy script templates that generate `next.config.js`):
+- `deploy_scripts/lib/build.sh` (2 locations: static export config and server-mode config)
+- `deploy_scripts/lib/deploy-portal.sh` (1 location: remote server-mode config)
+
+**Fix:**
+All server-mode `next.config.js` templates in the deploy scripts must include `compress: false`:
+
+```javascript
+module.exports = {
+  compress: false,  // nginx handles compression
+  // ... other settings
+};
+```
+
+**Verification:**
+After deploying, check the response headers:
+```bash
+curl -s -D - -o /dev/null -H "Accept-Encoding: gzip" https://www.goldengateclassic.org/portal | grep -i content-encoding
+```
+You should see `Content-Encoding: gzip` from nginx, not from Node.js. If you see it from both, `compress: false` is missing.
+
+**Key Principle:** When nginx handles compression (which it does in this project), always set `compress: false` in `next.config.js` to prevent the Node.js server from also compressing. Only one layer should compress.
+
+---
 
 ### Node.js Not Found on Server (NVM Users)
 

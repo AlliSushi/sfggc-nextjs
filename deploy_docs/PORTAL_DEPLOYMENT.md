@@ -128,6 +128,18 @@ bash backend/scripts/admin/create-super-admin.sh
 
 ### 6. Build and Start
 
+Before building, verify that `next.config.js` includes `compress: false`. Since nginx handles gzip compression, Node.js must not also compress responses. Double-compression wastes CPU and can corrupt data.
+
+```javascript
+// next.config.js (server mode, on the server)
+module.exports = {
+  compress: false,  // nginx handles compression
+  // ... other settings
+};
+```
+
+Then build and start:
+
 ```bash
 npm run build
 npm install -g pm2
@@ -149,48 +161,66 @@ The site uses a **hybrid nginx config**: static files for the public site and a 
 
 #### If You Have Direct Nginx Access
 
-In CloudPanel, add these location blocks to the nginx vhost for `www.goldengateclassic.org`:
+In CloudPanel, add the upstream block and location blocks to the nginx vhost for `www.goldengateclassic.org`:
 
 ```nginx
-# Static public site (existing — keep this)
-location / {
-    try_files $uri $uri/ $uri.html /index.html;
+# Upstream block (BEFORE the server {} block)
+upstream portal_backend {
+    server 127.0.0.1:3000;
+    keepalive 16;    # persistent connections, saves 20-50ms/request
 }
 
-# Portal pages — proxy to Next.js server
-location /portal {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection 'upgrade';
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_cache_bypass $http_upgrade;
-}
+server {
+    # ... SSL config ...
 
-# Portal API routes
-location /api/portal {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
+    # Static public site (existing -- keep this)
+    location / {
+        try_files $uri $uri/ $uri.html /index.html;
+    }
 
-# Next.js assets (needed for portal pages)
-location /_next {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    expires 1y;
-    add_header Cache-Control "public, immutable";
+    # Portal pages -- proxy to Next.js server
+    # CRITICAL: ^~ prevents the static asset regex from hijacking portal JS files
+    location ^~ /portal {
+        proxy_pass http://portal_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Portal API routes
+    location ^~ /api/portal {
+        proxy_pass http://portal_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Next.js static assets -- served from disk (bypasses Node.js)
+    location ^~ /_next/static {
+        alias /home/goldengateclassic/htdocs/www.goldengateclassic.org/portal-app/.next/static;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Next.js dynamic requests
+    location ^~ /_next {
+        proxy_pass http://portal_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+    }
 }
 ```
 
-**Important:** The `/portal`, `/api/portal`, and `/_next` blocks must appear **before** the `location /` block so nginx matches them first.
+**CRITICAL:** The `^~` modifier on all four portal location blocks is mandatory. Without it, the regex location `~* \.(js|css|...)$` (for caching static site assets) intercepts `/_next/static/*.js` requests, returning 404 for all Next.js bundles. This completely breaks React hydration -- pages load but all interactive elements (menus, forms, change log) are invisible.
 
 After saving in CloudPanel, test and reload:
 
@@ -205,7 +235,7 @@ If you cannot run `nginx -t` or `systemctl reload nginx` directly, use the copy/
 
 **Configuration File:** `backend/config/vhost.txt`
 
-This file contains the complete nginx vhost configuration, including the portal proxy settings (lines 34-68).
+This file contains the complete nginx vhost configuration, including the upstream block and all portal proxy settings with the required `^~` modifiers.
 
 **Workflow:**
 1. **Edit locally:** `nano backend/config/vhost.txt`
@@ -278,6 +308,23 @@ New SES accounts start in sandbox mode, which only allows sending to verified em
 
 ### Session issues after deploy
 Sessions are signed with `ADMIN_SESSION_SECRET`. If this value changes, all existing sessions are invalidated and users must log in again. This is expected and not harmful.
+
+### SSR Pages Broken After Nginx Changes (Redirects, 404s, Empty Data)
+
+After deploying nginx vhost changes, server-rendered portal pages may break: participant detail redirects to login, admin detail returns 404, team pages show empty data.
+
+**Root Cause:** Internal SSR API fetches must use `http://localhost:3000`, not the public URL. If `buildBaseUrl()` in `src/utils/portal/ssr-helpers.js` constructs a URL using `req.headers.host`, the SSR fetch loops through nginx and back to Node.js. Cloud servers often cannot connect to their own public IP (hairpin NAT), and even when they can, cookies and headers may be altered in the round-trip.
+
+**Quick diagnosis:**
+```bash
+# Direct to Node.js (works)
+curl -b "session=COOKIE" http://localhost:3000/api/portal/participants/12345
+
+# Through nginx (fails or returns wrong data)
+curl -b "session=COOKIE" https://www.goldengateclassic.org/api/portal/participants/12345
+```
+
+**Fix:** Ensure `buildBaseUrl()` returns `http://localhost:${PORT}`. See `SERVER_SETUP.md#troubleshooting-nginx-issues` for the full explanation.
 
 ### Static site pages return 404 after adding portal
 Make sure the `location /` block with `try_files` is still present in the nginx config. The portal proxy blocks should be added alongside it, not replace it.
