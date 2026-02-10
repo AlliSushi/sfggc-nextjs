@@ -39,6 +39,25 @@ The portal is a single-repo setup with a Next.js frontend and Next.js API routes
 - Participant login uses single-use magic links (30-minute expiry) that create a 48-hour session.
 - Audit log records admin edits and imports.
 - API routes enforce admin session checks where required.
+- Session revocation system allows immediate invalidation of all admin sessions for security breach scenarios.
+- Force password change feature enables super admins to reset other admin passwords with session revocation.
+
+### Auth Guard Await Requirement
+
+All auth guard functions (`requireSuperAdmin`, `requireAdmin`, `requireParticipantMatchOrAdmin`) are **async** and **MUST** be called with `await`. Omitting `await` causes a silent authentication bypass.
+
+**Correct usage:**
+```javascript
+const payload = await requireSuperAdmin(req, res);
+if (!payload) return;
+```
+
+**What goes wrong without `await`:**
+- The return value is a `Promise` object, which is always truthy.
+- The `if (!payload) return` guard never triggers -- any request passes authentication.
+- `payload.email`, `payload.role`, etc. are all `undefined` (they are Promise properties, not session data), causing downstream errors such as "Column 'admin_email' cannot be null."
+
+**Enforcement:** `tests/unit/auth-guard-await.test.js` performs static analysis on all 11 API route files to verify every call to an auth guard is preceded by `await`. This test fails the build if any call site is missing the keyword.
 
 ## Proposed Auth Flows (text graphics)
 
@@ -125,6 +144,7 @@ Acceptance criteria (BDD-style):
 - `POST /api/portal/admin/admins`
 - `GET /api/portal/admin/audit`
 - `DELETE /api/portal/admin/audit`
+- `POST /api/portal/admins/:id/force-password-change`
 
 ## Proposed API Contracts (initial)
 
@@ -300,6 +320,68 @@ Response:
 }
 ```
 
+`POST /api/portal/admins/:id/force-password-change`
+
+**Authorization**: Super admin only (verified via `requireSuperAdmin` guard)
+
+**Purpose**: Force immediate password reset on another admin account for security breach scenarios. Generates temporary password, invalidates all existing sessions, and sends email notification.
+
+Request:
+```
+POST /api/portal/admins/550e8400-e29b-41d4-a716-446655440000/force-password-change
+Authorization: Cookie (admin_session)
+Content-Type: application/json
+```
+
+Response (Success):
+```json
+{
+  "ok": true,
+  "message": "Password reset. Admin will receive email with temporary password."
+}
+```
+
+Response (Cannot reset own account):
+```json
+{
+  "error": "Cannot force password change on your own account."
+}
+```
+Status: 403 Forbidden
+
+Response (Admin not found):
+```json
+{
+  "error": "Admin not found."
+}
+```
+Status: 404 Not Found
+
+Response (Not super admin):
+```json
+{
+  "error": "Forbidden"
+}
+```
+Status: 403 Forbidden
+
+**Side Effects**:
+1. Generates cryptographically secure 16-character temporary password
+2. Updates admin record:
+   - `password_hash` - Set to bcrypt hash of temporary password
+   - `must_change_password` - Set to `true`
+   - `sessions_revoked_at` - Set to `NOW()`
+3. Invalidates ALL existing sessions for target admin (immediate effect)
+4. Logs action in `admin_actions` table with details
+5. Sends email to target admin with temporary password
+
+**Security Notes**:
+- Cannot force password change on your own account (must use normal password reset flow)
+- Temporary password is never stored in plain text (bcrypt hashed immediately)
+- All sessions created before `NOW()` become invalid instantly
+- Target admin MUST change password on next login (cannot keep temporary password)
+- Action is logged with super admin email and target admin details
+
 ## Book Average and Handicap Management
 
 ### Overview
@@ -401,3 +483,261 @@ See [portal_database_architecture.md](portal_database_architecture.md#scores-tab
 
 - CSV seed script for local/staging data.
 - XML import via admin dashboard and `/api/portal/admin/import-xml`.
+
+## Force Password Change
+
+### Overview
+
+The force password change feature allows super admins to immediately reset another admin's password for security breach scenarios (e.g., compromised credentials, suspicious activity, account takeover). This feature provides a rapid response mechanism to secure admin accounts.
+
+### Security Workflow
+
+When a super admin forces a password reset:
+
+1. **Generates temporary password**: Creates a cryptographically secure 16-character password using Node.js `crypto.randomBytes()`
+2. **Updates admin record**: Sets new password hash, marks `must_change_password = true`, and sets `sessions_revoked_at = NOW()`
+3. **Invalidates all sessions**: All existing session tokens become invalid immediately (sessions created before revocation timestamp are rejected)
+4. **Sends email notification**: Admin receives email with temporary password via `admin-forced-password-reset` template
+5. **Forces password change on login**: Admin must change password on next login (cannot reuse temporary password)
+6. **Logs action**: Records super admin action in `admin_actions` table with target admin details
+
+**Flow Diagram**:
+
+```mermaid
+sequenceDiagram
+    participant SA as Super Admin
+    participant API as API Endpoint
+    participant DB as Database
+    participant Email as Email Service
+    participant TA as Target Admin
+
+    SA->>API: POST /api/portal/admins/[id]/force-password-change
+    API->>API: requireSuperAdmin() guard
+    API->>DB: SELECT admin WHERE id = ?
+    DB-->>API: Admin record
+    API->>API: Generate temp password (16 chars)
+    API->>API: Hash with bcrypt
+
+    API->>DB: BEGIN TRANSACTION
+    API->>DB: UPDATE admins SET<br/>password_hash, must_change_password=true,<br/>sessions_revoked_at=NOW()
+    API->>DB: INSERT admin_actions (force_password_change)
+    API->>Email: Send forced reset email
+    Email-->>TA: Email with temp password
+    API->>DB: COMMIT TRANSACTION
+
+    API-->>SA: 200 OK (password reset)
+
+    Note over TA: Existing sessions now invalid
+
+    TA->>API: POST /api/portal/admin/login (temp password)
+    API->>DB: Validate credentials
+    API->>API: Check must_change_password flag
+    API-->>TA: Redirect to /portal/admin/reset
+
+    TA->>API: POST /api/portal/admin/reset-password (new password)
+    API->>DB: SELECT current password_hash
+    API->>API: Verify new password != current (bcrypt.compare)
+    API->>DB: UPDATE password_hash,<br/>must_change_password=false
+    API-->>TA: 200 OK (password changed)
+
+    TA->>API: Normal login with new password
+    API-->>TA: Success (new session created)
+```
+
+### Implementation Details
+
+**API Endpoint**: `POST /api/portal/admins/[id]/force-password-change`
+
+**Authorization**: Super admin only (verified via `requireSuperAdmin` guard)
+
+**Constraints**:
+- Cannot force password change on your own account (403 Forbidden)
+- Target admin must exist (404 Not Found)
+- Only super admins can invoke this endpoint (403 Forbidden for tournament admins)
+
+**Database Changes**:
+- `password_hash` - Set to bcrypt hash of temporary password
+- `must_change_password` - Set to `true`
+- `sessions_revoked_at` - Set to `NOW()` (current timestamp)
+
+**Email Template**: `admin-forced-password-reset`
+- Subject: "Your admin password has been reset"
+- Body: Includes temporary password and instructions to change it
+- Variables: `firstName`, `lastName`, `email`, `temporaryPassword`, `loginUrl`
+
+### Session Revocation System
+
+**How It Works**:
+- Every authenticated admin request calls `checkSessionRevocation()` in auth guards
+- Queries `SELECT sessions_revoked_at FROM admins WHERE email = ? LIMIT 1`
+- Compares session's `iat` (issued at) timestamp with `sessions_revoked_at`
+- If `iat < sessions_revoked_at`, session is invalid (returns 401 Unauthorized)
+- If `sessions_revoked_at` is NULL, all sessions are valid
+
+**Session Validation Flow**:
+
+```mermaid
+flowchart TD
+    A[Admin Request] --> B[Parse Session Cookie]
+    B --> C{Session Valid?}
+    C -->|No| D[401 Unauthorized]
+    C -->|Yes| E[Extract email & iat from token]
+    E --> F[Query DB: sessions_revoked_at]
+    F --> G{Revocation timestamp exists?}
+    G -->|No NULL| H[Session Valid ✓]
+    G -->|Yes| I{iat >= sessions_revoked_at?}
+    I -->|Yes| H
+    I -->|No| J[Session Revoked ✗]
+    J --> D
+    H --> K[Continue to endpoint handler]
+
+    style H fill:#90EE90
+    style J fill:#FFB6C6
+    style D fill:#FFB6C6
+```
+
+**Performance Characteristics**:
+- **Query frequency**: Once per authenticated admin request
+- **Affected endpoints**: 28 auth guard calls across 12 API endpoints
+- **Query type**: Single indexed column lookup (email unique constraint)
+- **Expected latency**: 1-10ms local, 5-30ms RDS
+- **Current impact**: LOW (acceptable for tournament portal with 5-10 concurrent admins)
+
+**When to Optimize**:
+If API response times consistently exceed 200ms or database latency becomes problematic:
+- Implement in-memory cache (60-second TTL) for `sessions_revoked_at` values
+- Cache key: admin email
+- Invalidation: On force password change, clear cache entry
+- Trade-off: Sessions may remain valid for up to 60 seconds after revocation (acceptable for most scenarios)
+
+See [Performance Considerations](#performance-considerations) for detailed analysis.
+
+### Password Reset Flow
+
+**Login with temporary password**:
+1. Admin enters temporary password at `/portal/admin/login`
+2. Backend validates credentials and checks `must_change_password` flag
+3. Redirects to `/portal/admin/reset` with secure reset cookie
+4. Admin must enter new password (different from temporary password)
+5. Backend validates new password is different using `bcrypt.compare()` against current hash
+6. Sets `must_change_password = false` and clears reset cookie
+
+**Password Validation**:
+- Minimum 8 characters
+- Must include uppercase, lowercase, number, and special character
+- Cannot reuse current password (validated via bcrypt comparison)
+- Prevents admin from keeping temporary password
+
+### Files Modified
+
+**Backend**:
+- `src/pages/api/portal/admins/[id]/force-password-change.js` - API endpoint
+- `src/utils/portal/auth-guards.js` - Session revocation checks in `requireAdmin`, `requireSuperAdmin`, `requireParticipantMatchOrAdmin`
+- `src/utils/portal/session.js` - Added `iat` timestamp to session tokens
+- `src/pages/api/portal/admin/reset-password.js` - Password reuse validation
+- `src/utils/portal/email-templates-db.js` - Email template for forced reset
+- `src/utils/portal/send-login-email.js` - Email sending function
+
+**Database**:
+- Migration: `backend/scripts/migrations/add-sessions-revoked-at.sh`
+- Adds `sessions_revoked_at TIMESTAMP NULL` column to `admins` table
+- Idempotent (safe to run multiple times)
+
+**Test Coverage**:
+- `tests/unit/admin-force-password-change-api.test.js` (8 tests)
+- `tests/unit/session-revocation-auth-guards.test.js` (10 tests)
+- `tests/unit/password-reset-no-reuse.test.js` (6 tests)
+- `tests/unit/forced-reset-email.test.js` (5 tests)
+
+### Admin UI (Future Enhancement)
+
+The API is fully functional, but UI integration is pending:
+- Add "Force Password Reset" button on admin detail page
+- Show confirmation dialog before reset
+- Display success message with "Email sent to [admin]"
+- Refresh admin list to show updated status
+
+## Performance Considerations
+
+### Session Revocation Database Queries
+
+Every authenticated admin request includes a database query to check session revocation status. This section documents the performance characteristics and optimization strategies.
+
+**Query Pattern**:
+```sql
+SELECT sessions_revoked_at FROM admins WHERE email = ? LIMIT 1
+```
+
+**Performance Metrics**:
+- **Query type**: Single-column indexed lookup (email unique constraint)
+- **Result size**: 1 row, 1 column (TIMESTAMP or NULL)
+- **Frequency**: Once per authenticated admin request (28 auth guard calls across 12 endpoints)
+- **Latency**:
+  - Local MariaDB: 1-10ms
+  - AWS RDS: 5-30ms
+  - High-latency networks: 30-100ms
+
+**Current Load Characteristics**:
+- **Admin concurrency**: 5-10 admins typical, 20 max during tournament
+- **Request patterns**: Occasional dashboard loads, participant searches, imports (not real-time)
+- **Impact**: LOW - Query latency is negligible compared to overall request processing time
+
+**When to Consider Optimization**:
+
+Implement caching if:
+- API response times consistently exceed 200ms
+- Database CPU consistently exceeds 70%
+- Admin concurrency exceeds 20 concurrent users
+- Real-time features added (e.g., live scoring, polling)
+
+**Optimization Strategy**:
+
+If performance becomes an issue, implement in-memory cache:
+
+```javascript
+// Example: Node.js in-memory cache with 60s TTL
+const revokedAtCache = new Map();
+const CACHE_TTL_MS = 60000;
+
+async function checkSessionRevocation(adminSession) {
+  const cacheKey = adminSession.email;
+  const cached = revokedAtCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  // Query database
+  const { rows } = await query(
+    "SELECT sessions_revoked_at FROM admins WHERE email = ? LIMIT 1",
+    [adminSession.email]
+  );
+
+  const revokedAt = rows[0]?.sessions_revoked_at;
+
+  // Cache result
+  revokedAtCache.set(cacheKey, {
+    value: revokedAt,
+    expiresAt: Date.now() + CACHE_TTL_MS
+  });
+
+  // ... rest of validation logic
+}
+
+// Clear cache on force password change
+function clearRevocationCache(email) {
+  revokedAtCache.delete(email);
+}
+```
+
+**Trade-offs**:
+- **Pros**: Reduces database queries by 99%, improves response times
+- **Cons**: Revoked sessions may remain valid for up to 60 seconds (acceptable for most security scenarios)
+
+**Monitoring**:
+
+Track these metrics to identify if optimization is needed:
+- API endpoint response times (P50, P95, P99)
+- Database query latency (cloudwatch for RDS)
+- Admin session count (concurrent and peak)
+- Error rates (database connection errors, timeouts)

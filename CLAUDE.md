@@ -158,12 +158,16 @@ There is **no separate backend server**. The "backend" is implemented via:
 **API Routes:**
 - Authentication: `POST /api/portal/admin/login`, `POST /api/portal/participant/login`, `GET /api/portal/participant/verify`
 - Data: `GET /api/portal/participants`, `GET /api/portal/participants/[pid]`, `PATCH /api/portal/participants/[pid]`
+- Admin management: `GET/PATCH /api/portal/admins/[id]`, `POST /api/portal/admins/[id]/force-password-change`
 - Admin: `POST /api/portal/admin/import-xml`, `GET /api/portal/admin/audit`
+
+**Note:** Sub-routes use `[id]/index.js` pattern. See `CLAUDE-PATTERNS.md#Next.js API Route Patterns`
 
 **Authentication:**
 - **Admins:** Email/password with bcrypt, 6-hour sessions, roles: `super-admin` or `tournament-admin`
+- **Session revocation:** Timestamp-based invalidation (`sessions_revoked_at` vs `iat`), no blacklist needed. See `CLAUDE-PATTERNS.md#Session Management Patterns`
 - **Participants:** Magic links (30-min expiry) creating 48-hour sessions, passwordless
-- **Sessions:** Custom HMAC-SHA256 signed tokens (not JWT), stored in HttpOnly cookies
+- **Sessions:** Custom HMAC-SHA256 signed tokens (not JWT), stored in HttpOnly cookies with `iat` timestamp
 
 ### Database Architecture
 
@@ -204,7 +208,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 - Idempotent checks (exits early if already applied)
 - Unix socket detection for localhost, TCP fallback
 - BDD test in `tests/unit/migrations/` verifying existence, executability, idempotency
-- See `deploy_docs/MIGRATIONS.md` for template
+- See `deploy_docs/MIGRATIONS.md` for templates, `CLAUDE-PATTERNS.md#Database Migration Patterns` for implementation patterns
 
 ### Component Conventions
 
@@ -293,11 +297,13 @@ Most components are sections with:
 - See `deploy_docs/MIGRATIONS.md` for migration system details
 
 **Documentation:**
+- `CLAUDE-PATTERNS.md` - Reusable code patterns (session management, password security, API routes, migrations, testing)
 - `CLAUDE-DEPLOYMENT.md` - Deployment patterns, credential handling, CI/CD, critical gotchas
 - `portal_docs/portal_architecture.md` - Complete portal architecture
 - `portal_docs/portal_database_architecture.md` - Database design details
 - `deploy_docs/DEPLOYMENT.md` - Deployment guide
 - `deploy_docs/UNIFIED_DEPLOYMENT.md` - Technical deployment documentation
+- `deploy_docs/MIGRATIONS.md` - Database migration system
 - `SERVER_SETUP.md` - Server configuration and troubleshooting
 
 ## Development Notes
@@ -374,6 +380,8 @@ BDD workflow methodology is defined in the user-level `~/.claude/CLAUDE.md`. Thi
 - **Behavioral tests** -- exercise functions/modules with inputs, assert outputs. See `backend/tests/api/audit.test.js`.
 - **Route existence tests** -- verify expected files exist on disk. See `tests/frontend/portal-routes.test.js`.
 
+**See `CLAUDE-PATTERNS.md#BDD Test Patterns` for test implementation patterns.**
+
 **Test Locations:**
 
 | Directory | Purpose |
@@ -398,9 +406,11 @@ bash scripts/test/test-backend.sh  # Backend/API tests only
 ### Security Considerations
 
 - All database queries use parameterized statements (SQL injection prevention)
-- Admin passwords hashed with bcrypt
+- Admin passwords hashed with bcrypt, strong password generation uses `crypto.randomInt()` (see `CLAUDE-PATTERNS.md#Password Security Patterns`)
 - Session tokens in HttpOnly cookies (XSS prevention)
 - HMAC signatures on session tokens (tampering prevention)
+- Session revocation via timestamp comparison (force password change, security breach scenarios)
 - Audit logging for admin actions
 - No user enumeration on participant login (always shows "check your email")
 - Role-based access control enforced at API route level
+- **Auth guards MUST be awaited** -- `requireSuperAdmin`, `requireAdmin`, `requireParticipantMatchOrAdmin` are async; missing `await` bypasses auth entirely (see `CLAUDE-PATTERNS.md#Auth Guard Await Pattern`)

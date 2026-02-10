@@ -143,10 +143,17 @@ DB-backed tests:
 
 The portal UI and backend deploy together as a Next.js application. See [PORTAL_DEPLOYMENT.md](../deploy_docs/PORTAL_DEPLOYMENT.md) for server setup, environment variables, and production deployment steps.
 
-See:
-- [portal_layout.md](portal_layout.md)
-- [portal_architecture.md](portal_architecture.md)
-- [portal_database_architecture.md](portal_database_architecture.md)
+## Documentation
+
+**Architecture & Design**:
+- [portal_layout.md](portal_layout.md) - UI layout and component structure
+- [portal_architecture.md](portal_architecture.md) - System architecture, authentication, and API endpoints
+- [portal_database_architecture.md](portal_database_architecture.md) - Database schema and relationships
+
+**Operations & Security**:
+- [ADMIN_SECURITY_PROCEDURES.md](ADMIN_SECURITY_PROCEDURES.md) - Force password change, incident response, and security procedures
+- [PERFORMANCE.md](PERFORMANCE.md) - Performance characteristics, monitoring, and optimization strategies
+- [../deploy_docs/MIGRATIONS.md](../deploy_docs/MIGRATIONS.md) - Database migration procedures
 
 ## Troubleshooting
 

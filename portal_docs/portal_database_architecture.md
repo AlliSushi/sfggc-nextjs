@@ -62,6 +62,8 @@ create table if not exists admins (
   phone text unique,
   password_hash text,
   role text not null default 'super-admin',
+  must_change_password boolean default false,
+  sessions_revoked_at timestamp null,
   created_at timestamp default current_timestamp
 );
 
@@ -217,6 +219,188 @@ const bookAvg = toNumber(person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE);
 
 This handles both attribute-based and simple text content.
 
+## Admins Table: Session Revocation
+
+### Overview
+
+The `admins` table includes session management columns for security breach scenarios:
+
+- **must_change_password** (boolean): Flags admin accounts that must change password on next login
+- **sessions_revoked_at** (timestamp NULL): Timestamp when all sessions should be invalidated
+
+### Session Revocation System
+
+**Purpose**: Enable immediate invalidation of all admin sessions when security breach detected (compromised credentials, suspicious activity, account takeover).
+
+**How It Works**:
+1. Super admin forces password change via `POST /api/portal/admins/[id]/force-password-change`
+2. Backend sets `sessions_revoked_at = NOW()` for target admin
+3. Every authenticated request checks session's `iat` (issued at) timestamp
+4. If `iat < sessions_revoked_at`, session is rejected (401 Unauthorized)
+5. Only sessions created AFTER revocation timestamp are valid
+
+**Column Definition**:
+```sql
+sessions_revoked_at TIMESTAMP NULL
+```
+
+**Values**:
+- `NULL` - All sessions valid (default state)
+- `2026-02-09 15:30:00` - All sessions created before this timestamp are invalid
+
+**Migration**: `backend/scripts/migrations/add-sessions-revoked-at.sh`
+- Adds column after `must_change_password`
+- Defaults to NULL (existing admins unaffected)
+- Idempotent (safe to run multiple times)
+
+### Performance Impact
+
+**Query Pattern**:
+Every authenticated admin request executes:
+```sql
+SELECT sessions_revoked_at FROM admins WHERE email = ? LIMIT 1
+```
+
+**Characteristics**:
+- **Indexed lookup**: Uses email unique constraint (fast)
+- **Result size**: 1 row, 1 column (minimal data transfer)
+- **Frequency**: Once per authenticated admin request
+- **Latency**: 1-10ms local, 5-30ms RDS
+
+**Affected Endpoints** (28 auth guard calls across 12 files):
+- Admin dashboard and session management
+- Participant CRUD operations
+- Audit log access
+- Email template management
+- XML imports
+- Admin user management
+
+**Current Impact**: LOW
+- Tournament portal has 5-10 concurrent admins typical, 20 max
+- Query latency is negligible compared to request processing
+- No real-time or polling features
+
+**Optimization Strategy**:
+If performance becomes an issue (response times >200ms consistently):
+- Implement in-memory cache with 60-second TTL
+- Cache key: admin email
+- Clear cache entry on force password change
+- Trade-off: Revoked sessions may remain valid up to 60 seconds
+
+See [portal_architecture.md#performance-considerations](portal_architecture.md#performance-considerations) for detailed optimization strategies.
+
+### Force Password Change Flow
+
+**Database Transaction**:
+```sql
+-- Update admin record (atomic operation)
+UPDATE admins
+SET password_hash = ?,
+    must_change_password = true,
+    sessions_revoked_at = NOW()
+WHERE id = ?;
+
+-- Log admin action
+INSERT INTO admin_actions (id, admin_email, action, details)
+VALUES (?, ?, 'force_password_change', ?);
+```
+
+**Session Token Structure**:
+```javascript
+{
+  email: "admin@example.com",
+  role: "super-admin",
+  iat: 1707493800000  // Issued at timestamp (milliseconds)
+}
+```
+
+**Validation Logic**:
+```javascript
+// Auth guard checks
+const sessionCreatedAt = adminSession.iat;
+const revocationTime = new Date(sessionsRevokedAt).getTime();
+
+if (sessionCreatedAt < revocationTime) {
+  // Session created before revocation - invalid
+  return false;
+}
+```
+
+### Password Change Enforcement
+
+**Flow**:
+1. Admin logs in with temporary password
+2. `must_change_password` flag detected
+3. Redirected to `/portal/admin/reset` with secure reset cookie
+4. Backend validates new password is different from current password
+5. Sets `must_change_password = false` after successful reset
+
+**Password Reuse Prevention**:
+```javascript
+// Compare new password with current hash
+const isSamePassword = await bcrypt.compare(newPassword, currentHash);
+if (isSamePassword) {
+  return error("New password must be different from current password");
+}
+```
+
+### Related Tables
+
+**admin_password_resets**:
+Tracks password reset tokens for the reset flow:
+```sql
+create table if not exists admin_password_resets (
+  id char(36) primary key default (uuid()),
+  admin_id char(36) not null references admins(id),
+  token text not null unique,
+  expires_at timestamp not null,
+  used_at timestamp,
+  created_at timestamp default current_timestamp
+);
+```
+
+**admin_actions**:
+Logs all force password change actions:
+```sql
+create table if not exists admin_actions (
+  id char(36) primary key default (uuid()),
+  admin_email text not null,
+  action text not null,
+  details text,
+  created_at timestamp default current_timestamp
+);
+```
+
+Example action log entry:
+```json
+{
+  "admin_email": "superadmin@example.com",
+  "action": "force_password_change",
+  "details": {
+    "targetAdminId": "550e8400-e29b-41d4-a716-446655440000",
+    "targetAdminEmail": "targetadmin@example.com"
+  }
+}
+```
+
+### Test Coverage
+
+BDD tests verify session revocation behavior:
+- `tests/unit/session-revocation-auth-guards.test.js` (10 tests)
+  - Sessions created before revocation are rejected
+  - Sessions created after revocation are accepted
+  - NULL revocation timestamp allows all sessions
+  - Each auth guard type validated
+- `tests/unit/admin-force-password-change-api.test.js` (8 tests)
+  - Force password change sets all three columns
+  - Cannot force change on own account
+  - Super admin authorization required
+  - Email sent with temporary password
+- `tests/unit/password-reset-no-reuse.test.js` (6 tests)
+  - Cannot reuse current password
+  - Password comparison using bcrypt
+  - Reset flow validation
+
 ## Indexing (initial)
 
 - `people.email`, `people.phone`
@@ -224,3 +408,4 @@ This handles both attribute-based and simple text content.
 - `scores.pid`, `scores.event_id`
 - `scores(pid, event_type)` - unique constraint for upserts
 - `audit_logs.admin_id`, `audit_logs.created_at`
+- `admins.email` - unique constraint (also serves as index for session revocation queries)
