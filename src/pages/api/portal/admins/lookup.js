@@ -11,7 +11,7 @@ export default async function handler(req, res) {
 
   try {
     await ensureAdminTables();
-    const payload = requireSuperAdmin(req, res);
+    const payload = await requireSuperAdmin(req, res);
     if (!payload) return;
 
     const queryValue = (req.query?.q || "").trim();

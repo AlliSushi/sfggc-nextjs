@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const payload = requireSuperAdmin(req, res);
+    const payload = await requireSuperAdmin(req, res);
     if (!payload) return;
 
     await query("delete from audit_logs");

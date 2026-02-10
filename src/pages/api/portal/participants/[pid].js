@@ -18,7 +18,7 @@ const resolveAdminEmail = (sessions) =>
   "admin@local";
 
 const handleGet = async (req, res, pid) => {
-  const sessions = requireParticipantMatchOrAdmin(req, res, pid);
+  const sessions = await requireParticipantMatchOrAdmin(req, res, pid);
   if (!sessions) return;
 
   const participant = await formatParticipant(pid);
@@ -30,7 +30,7 @@ const handleGet = async (req, res, pid) => {
 };
 
 const handlePatch = async (req, res, pid) => {
-  const sessions = requireParticipantMatchOrAdmin(req, res, pid);
+  const sessions = await requireParticipantMatchOrAdmin(req, res, pid);
   if (!sessions) return;
 
   const current = await formatParticipant(pid);

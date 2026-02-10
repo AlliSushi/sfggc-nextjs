@@ -12,7 +12,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const payload = requireSuperAdmin(req, res);
+    const payload = await requireSuperAdmin(req, res);
     if (!payload) return;
 
     await initializeEmailTemplates();

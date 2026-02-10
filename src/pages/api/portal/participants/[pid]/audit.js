@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const sessions = requireParticipantMatchOrAdmin(req, res, pid);
+    const sessions = await requireParticipantMatchOrAdmin(req, res, pid);
     if (!sessions) {
       return;
     }

@@ -60,7 +60,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const adminSession = requireAdmin(req, res);
+    const adminSession = await requireAdmin(req, res);
     if (!adminSession) {
       return;
     }
