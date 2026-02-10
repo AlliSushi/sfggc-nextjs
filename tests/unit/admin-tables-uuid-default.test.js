@@ -25,7 +25,7 @@ const ADMIN_DETAIL_API = path.join(
 );
 const PORTAL_API_TESTS = path.join(
   process.cwd(),
-  "tests/unit/portal-api.test.js"
+  "tests/integration/portal-api.test.js"
 );
 
 describe("admin_password_resets id default", () => {
