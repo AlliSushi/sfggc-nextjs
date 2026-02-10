@@ -33,7 +33,7 @@ test("Given the portal MVP, when checking routes, then key pages exist", () => {
   ensureFileExists("src/pages/api/portal/admin/logout.js");
   ensureFileExists("src/pages/api/portal/admins/index.js");
   ensureFileExists("src/pages/api/portal/admins/lookup.js");
-  ensureFileExists("src/pages/api/portal/admins/[id].js");
+  ensureFileExists("src/pages/api/portal/admins/[id]/index.js");
   ensureFileExists("src/pages/api/portal/admin/reset-password.js");
   ensureFileExists("src/pages/portal/admin/reset-password.js");
 });

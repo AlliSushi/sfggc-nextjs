@@ -55,8 +55,26 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Get current password hash to ensure new password is different
+    const { rows: adminRows } = await query(
+      "select password_hash from admins where id = ? limit 1",
+      [reset.admin_id]
+    );
+    const admin = adminRows[0];
+    if (!admin) {
+      res.status(404).json({ error: "Admin not found." });
+      return;
+    }
+
+    // Validate new password is different from current password
+    const isSamePassword = await bcrypt.compare(password, admin.password_hash);
+    if (isSamePassword) {
+      res.status(400).json({ error: "New password must be different from your current password." });
+      return;
+    }
+
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-    await query("update admins set password_hash = ? where id = ?", [
+    await query("update admins set password_hash = ?, must_change_password = false where id = ?", [
       passwordHash,
       reset.admin_id,
     ]);

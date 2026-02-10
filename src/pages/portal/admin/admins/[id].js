@@ -29,6 +29,10 @@ const AdminDetailPage = ({ admin: initialAdmin, adminRole, adminEmail, superAdmi
   const [isRevoking, setIsRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState("");
 
+  const [showForcePasswordChange, setShowForcePasswordChange] = useState(false);
+  const [isForcing, setIsForcing] = useState(false);
+  const [forceError, setForceError] = useState("");
+
   const adminDisplayName = (a) => {
     if (a.first_name || a.last_name) {
       return `${a.first_name || ""} ${a.last_name || ""}`.trim();
@@ -93,6 +97,29 @@ const AdminDetailPage = ({ admin: initialAdmin, adminRole, adminEmail, superAdmi
     }
   };
 
+  const handleForcePasswordChange = async () => {
+    setIsForcing(true);
+    setForceError("");
+    try {
+      const response = await portalFetch(
+        `/api/portal/admins/${admin.id}/force-password-change`,
+        { method: "POST" }
+      );
+      if (!response.ok) {
+        const data = await response.json();
+        setForceError(data?.error || "Unable to force password change.");
+        setIsForcing(false);
+        return;
+      }
+      setShowForcePasswordChange(false);
+      setIsForcing(false);
+      alert("Password reset successful. Admin will receive an email with temporary password.");
+    } catch (err) {
+      setForceError("Unable to force password change.");
+      setIsForcing(false);
+    }
+  };
+
   if (!admin) {
     return (
       <div>
@@ -145,13 +172,22 @@ const AdminDetailPage = ({ admin: initialAdmin, adminRole, adminEmail, superAdmi
               </>
             )}
             {!isEditing && canRevokeAdmin(admin, adminEmail, superAdminCount) && (
-              <button
-                className="btn btn-outline-danger"
-                type="button"
-                onClick={() => setShowRevokeModal(true)}
-              >
-                Revoke
-              </button>
+              <>
+                <button
+                  className="btn btn-outline-warning"
+                  type="button"
+                  onClick={() => setShowForcePasswordChange(true)}
+                >
+                  Force Password Change
+                </button>
+                <button
+                  className="btn btn-outline-danger"
+                  type="button"
+                  onClick={() => setShowRevokeModal(true)}
+                >
+                  Revoke
+                </button>
+              </>
             )}
           </div>
           <div className="col-12 col-md-6 text-md-end">
@@ -161,112 +197,162 @@ const AdminDetailPage = ({ admin: initialAdmin, adminRole, adminEmail, superAdmi
 
         {error && <div className="alert alert-danger">{error}</div>}
 
-        {!isEditing && (
-          <div className="row g-3">
-            <div className="col-12 col-md-6">
-              <strong>First name</strong>
-              <p>{admin.first_name || "\u2014"}</p>
-            </div>
-            <div className="col-12 col-md-6">
-              <strong>Last name</strong>
-              <p>{admin.last_name || "\u2014"}</p>
-            </div>
-            <div className="col-12 col-md-6">
-              <strong>Email</strong>
-              <p>{admin.email || "\u2014"}</p>
-            </div>
-            <div className="col-12 col-md-6">
-              <strong>Phone</strong>
-              <p>{admin.phone || "\u2014"}</p>
-            </div>
-            <div className="col-12 col-md-6">
-              <strong>Role</strong>
-              <p>
-                <span className={`badge ${admin.role === "super-admin" ? "bg-danger" : "bg-primary"}`}>
-                  {admin.role}
-                </span>
-              </p>
-            </div>
-            <div className="col-12 col-md-6">
-              <strong>Participant</strong>
-              <p>
-                {admin.pid ? (
-                  <Link href={`/portal/participant/${admin.pid}`}>{admin.pid}</Link>
-                ) : (
-                  "Not a participant"
+        <section className="card">
+          <div className="card-body">
+            {!isEditing && (
+              <div className="row g-3">
+                <div className="col-12 col-md-6">
+                  <strong>First name</strong>
+                  <p>{admin.first_name || "\u2014"}</p>
+                </div>
+                <div className="col-12 col-md-6">
+                  <strong>Last name</strong>
+                  <p>{admin.last_name || "\u2014"}</p>
+                </div>
+                <div className="col-12 col-md-6">
+                  <strong>Email</strong>
+                  <p>{admin.email || "\u2014"}</p>
+                </div>
+                <div className="col-12 col-md-6">
+                  <strong>Phone</strong>
+                  <p>{admin.phone || "\u2014"}</p>
+                </div>
+                <div className="col-12 col-md-6">
+                  <strong>Role</strong>
+                  <p>
+                    <span className={`badge ${admin.role === "super-admin" ? "bg-danger" : "bg-primary"}`}>
+                      {admin.role}
+                    </span>
+                  </p>
+                </div>
+                <div className="col-12 col-md-6">
+                  <strong>Participant</strong>
+                  <p>
+                    {admin.pid ? (
+                      <Link href={`/portal/participant/${admin.pid}`}>{admin.pid}</Link>
+                    ) : (
+                      "Not a participant"
+                    )}
+                  </p>
+                </div>
+                {admin.created_at && (
+                  <div className="col-12 col-md-6">
+                    <strong>Created</strong>
+                    <p>{new Date(admin.created_at).toLocaleDateString()}</p>
+                  </div>
                 )}
-              </p>
-            </div>
-            {admin.created_at && (
-              <div className="col-12 col-md-6">
-                <strong>Created</strong>
-                <p>{new Date(admin.created_at).toLocaleDateString()}</p>
+              </div>
+            )}
+
+            {isEditing && (
+              <div className="row g-3">
+                <div className="col-12 col-md-6">
+                  <label className="form-label" htmlFor="edit-first-name">
+                    First name
+                  </label>
+                  <input
+                    id="edit-first-name"
+                    className="form-control"
+                    value={formState.firstName}
+                    onChange={handleChange("firstName")}
+                  />
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label" htmlFor="edit-last-name">
+                    Last name
+                  </label>
+                  <input
+                    id="edit-last-name"
+                    className="form-control"
+                    value={formState.lastName}
+                    onChange={handleChange("lastName")}
+                  />
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label" htmlFor="edit-email">
+                    Email
+                  </label>
+                  <input
+                    id="edit-email"
+                    className="form-control"
+                    value={formState.email}
+                    onChange={handleChange("email")}
+                  />
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label" htmlFor="edit-phone">
+                    Phone
+                  </label>
+                  <input
+                    id="edit-phone"
+                    className="form-control"
+                    value={formState.phone}
+                    onChange={handleChange("phone")}
+                  />
+                </div>
+                <div className="col-12 col-md-6">
+                  <label className="form-label" htmlFor="edit-role">
+                    Role
+                  </label>
+                  <select
+                    id="edit-role"
+                    className="form-select"
+                    value={formState.role}
+                    onChange={handleChange("role")}
+                  >
+                    <option value="super-admin">Super admin</option>
+                    <option value="tournament-admin">Tournament admin</option>
+                  </select>
+                </div>
               </div>
             )}
           </div>
-        )}
+        </section>
 
-        {isEditing && (
-          <div className="row g-3">
-            <div className="col-12 col-md-6">
-              <label className="form-label" htmlFor="edit-first-name">
-                First name
-              </label>
-              <input
-                id="edit-first-name"
-                className="form-control"
-                value={formState.firstName}
-                onChange={handleChange("firstName")}
-              />
-            </div>
-            <div className="col-12 col-md-6">
-              <label className="form-label" htmlFor="edit-last-name">
-                Last name
-              </label>
-              <input
-                id="edit-last-name"
-                className="form-control"
-                value={formState.lastName}
-                onChange={handleChange("lastName")}
-              />
-            </div>
-            <div className="col-12 col-md-6">
-              <label className="form-label" htmlFor="edit-email">
-                Email
-              </label>
-              <input
-                id="edit-email"
-                className="form-control"
-                value={formState.email}
-                onChange={handleChange("email")}
-              />
-            </div>
-            <div className="col-12 col-md-6">
-              <label className="form-label" htmlFor="edit-phone">
-                Phone
-              </label>
-              <input
-                id="edit-phone"
-                className="form-control"
-                value={formState.phone}
-                onChange={handleChange("phone")}
-              />
-            </div>
-            <div className="col-12 col-md-6">
-              <label className="form-label" htmlFor="edit-role">
-                Role
-              </label>
-              <select
-                id="edit-role"
-                className="form-select"
-                value={formState.role}
-                onChange={handleChange("role")}
-              >
-                <option value="super-admin">Super admin</option>
-                <option value="tournament-admin">Tournament admin</option>
-              </select>
-            </div>
-          </div>
+        {showForcePasswordChange && (
+          <PortalModal
+            title="Force password change"
+            onClose={() => { if (!isForcing) setShowForcePasswordChange(false); }}
+            actions={
+              <>
+                <button
+                  className="btn btn-outline-secondary"
+                  type="button"
+                  disabled={isForcing}
+                  onClick={() => setShowForcePasswordChange(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-warning"
+                  type="button"
+                  disabled={isForcing}
+                  onClick={handleForcePasswordChange}
+                >
+                  {isForcing ? "Processing..." : "Force password change"}
+                </button>
+              </>
+            }
+          >
+            <p>
+              Are you sure you want to force a password change for{" "}
+              <strong>{adminDisplayName(admin) || admin.email}</strong>
+              {adminDisplayName(admin) ? ` (${admin.email})` : ""}?
+            </p>
+            <p className="text-muted">
+              This will:
+            </p>
+            <ul className="text-muted">
+              <li>Generate a new temporary password</li>
+              <li>Send an email with the temporary password</li>
+              <li>Immediately log out all existing sessions</li>
+              <li>Require the admin to change their password on next login</li>
+            </ul>
+            <p className="text-muted mb-0">
+              This action will be recorded in the audit log.
+            </p>
+            {forceError && <div className="alert alert-danger mt-3">{forceError}</div>}
+          </PortalModal>
         )}
 
         {showRevokeModal && (

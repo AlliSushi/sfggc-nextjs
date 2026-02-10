@@ -21,7 +21,7 @@ const REQUEST_RESET_API = path.join(
 );
 const ADMIN_DETAIL_API = path.join(
   process.cwd(),
-  "src/pages/api/portal/admins/[id].js"
+  "src/pages/api/portal/admins/[id]/index.js"
 );
 const PORTAL_API_TESTS = path.join(
   process.cwd(),

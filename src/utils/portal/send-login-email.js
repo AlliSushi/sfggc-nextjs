@@ -94,10 +94,22 @@ const sendPasswordResetEmail = async ({ email, firstName, resetUrl, query }) => 
   });
 };
 
+const sendForcedPasswordResetEmail = async ({ email, firstName, lastName, temporaryPassword, query }) => {
+  const loginUrl = buildAdminLoginUrl();
+  await sendTemplatedEmail({
+    to: email,
+    slug: "admin-forced-password-reset",
+    variables: { firstName, lastName, email, temporaryPassword, loginUrl },
+    buttonUrl: loginUrl,
+    query,
+  });
+};
+
 export {
   sendLoginEmail,
   sendAdminWelcomeEmail,
   sendPasswordResetEmail,
+  sendForcedPasswordResetEmail,
   sendTemplatedEmail,
   buildVerifyUrl,
   buildResetUrl,

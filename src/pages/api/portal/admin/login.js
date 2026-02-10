@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     await ensureAdminResetTables();
     const { rows } = await query(
       `
-      select id, email, role, password_hash
+      select id, email, role, password_hash, must_change_password
       from admins
       where lower(email) = lower(?)
          or phone = ?
@@ -48,22 +48,45 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { rows: resetRows } = await query(
-      `
-      select token
-      from admin_password_resets
-      where admin_id = ?
-        and used_at is null
-        and expires_at > now()
-      order by created_at desc
-      limit 1
-      `,
-      [admin.id]
-    );
-    if (resetRows.length) {
+    // If admin must change password, ensure a reset token exists
+    if (admin.must_change_password) {
+      const { rows: existingResetRows } = await query(
+        `
+        select token
+        from admin_password_resets
+        where admin_id = ?
+          and used_at is null
+          and expires_at > now()
+        limit 1
+        `,
+        [admin.id]
+      );
+
+      // Use existing token or create a new one
+      const resetToken = existingResetRows.length
+        ? existingResetRows[0].token
+        : await (async () => {
+            const crypto = await import("crypto");
+            const { generateSecureToken, ADMIN_PASSWORD_RESET_TTL_MS } = await import("../../../../utils/portal/session.js");
+            const newToken = generateSecureToken();
+            await query(
+              `
+              insert into admin_password_resets (id, admin_id, token, expires_at)
+              values (?, ?, ?, ?)
+              `,
+              [
+                crypto.randomUUID(),
+                admin.id,
+                newToken,
+                new Date(Date.now() + ADMIN_PASSWORD_RESET_TTL_MS),
+              ]
+            );
+            return newToken;
+          })();
+
       res.setHeader(
         "Set-Cookie",
-        buildCookieString(COOKIE_ADMIN_RESET, resetRows[0].token, 3600)
+        buildCookieString(COOKIE_ADMIN_RESET, resetToken, 3600)
       );
       res.status(200).json({ ok: true, needsReset: true, email: admin.email });
       return;

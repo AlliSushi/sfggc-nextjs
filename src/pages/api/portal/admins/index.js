@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     }
 
     await ensureAdminResetTables();
-    const payload = requireSuperAdmin(req, res);
+    const payload = await requireSuperAdmin(req, res);
     if (!payload) return;
 
     if (req.method === "GET") {
@@ -83,8 +83,8 @@ export default async function handler(req, res) {
     await withTransaction(async (connQuery) => {
       await connQuery(
         `
-        insert into admins (id, email, first_name, last_name, phone, password_hash, role, name, pid)
-        values (?,?,?,?,?,?,?,?,?)
+        insert into admins (id, email, first_name, last_name, phone, password_hash, role, name, pid, must_change_password)
+        values (?,?,?,?,?,?,?,?,?,?)
         `,
         [
           adminId,
@@ -96,6 +96,7 @@ export default async function handler(req, res) {
           role,
           `${firstName} ${lastName}`.trim(),
           pid || null,
+          true,
         ]
       );
       await connQuery(

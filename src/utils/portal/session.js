@@ -51,11 +51,13 @@ const verifyToken = (token) => {
 };
 
 const buildSessionToken = ({ email, role, pid }, ttlMs = 24 * 60 * 60 * 1000) => {
+  const now = Date.now();
   const payload = {
     email,
     role,
     pid,
-    exp: Date.now() + ttlMs,
+    iat: now,
+    exp: now + ttlMs,
   };
   return signPayload(payload);
 };

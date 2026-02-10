@@ -1,12 +1,12 @@
 import crypto from "crypto";
-import { query, withTransaction } from "../../../../utils/portal/db.js";
+import { query, withTransaction } from "../../../../../utils/portal/db.js";
 import {
   ensureAdminActionsTables,
   requireSuperAdmin,
-} from "../../../../utils/portal/admins-server.js";
-import { requireAdmin } from "../../../../utils/portal/auth-guards.js";
-import { methodNotAllowed } from "../../../../utils/portal/http.js";
-import { ROLE_SUPER_ADMIN, ROLE_TOURNAMENT_ADMIN } from "../../../../utils/portal/roles.js";
+} from "../../../../../utils/portal/admins-server.js";
+import { requireAdmin } from "../../../../../utils/portal/auth-guards.js";
+import { methodNotAllowed } from "../../../../../utils/portal/http.js";
+import { ROLE_SUPER_ADMIN, ROLE_TOURNAMENT_ADMIN } from "../../../../../utils/portal/roles.js";
 
 const ALLOWED_METHODS = ["GET", "PATCH", "DELETE"];
 
@@ -14,7 +14,7 @@ const VALID_ROLES = [ROLE_SUPER_ADMIN, ROLE_TOURNAMENT_ADMIN];
 
 async function handleGet(req, res) {
   await ensureAdminActionsTables();
-  const payload = requireSuperAdmin(req, res);
+  const payload = await requireSuperAdmin(req, res);
   if (!payload) return;
 
   const { id } = req.query;
@@ -34,7 +34,7 @@ async function handleGet(req, res) {
 
 async function handlePatch(req, res) {
   await ensureAdminActionsTables();
-  const payload = requireSuperAdmin(req, res);
+  const payload = await requireSuperAdmin(req, res);
   if (!payload) return;
 
   const { id } = req.query;
@@ -113,7 +113,7 @@ async function handlePatch(req, res) {
 
 async function handleDelete(req, res) {
   await ensureAdminActionsTables();
-  const payload = requireAdmin(req, res);
+  const payload = await requireAdmin(req, res);
   if (!payload) return;
 
   const { id } = req.query;

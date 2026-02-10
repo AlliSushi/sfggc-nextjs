@@ -104,6 +104,19 @@ const DEFAULT_TEMPLATES = [
     use_html_override: false,
     available_variables: '["resetUrl","firstName","email"]',
   },
+  {
+    slug: "admin-forced-password-reset",
+    name: "Admin Forced Password Reset",
+    subject: "Your admin password has been reset",
+    greeting: "Hello, {{firstName}}!",
+    body: "Your password has been reset for security reasons by a super administrator.\n\nYour new temporary password is: {{temporaryPassword}}\n\nThis password is temporary and you will be required to change it when you log in.\n\nPlease log in at your earliest convenience and set a new password.",
+    button_text: "Sign in to the portal",
+    footer:
+      "If you have questions about this password reset, please contact the tournament organizer.",
+    html_override: "",
+    use_html_override: false,
+    available_variables: '["firstName","lastName","email","temporaryPassword","loginUrl"]',
+  },
 ];
 
 const seedDefaultTemplates = async (q = defaultQuery) => {

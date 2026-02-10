@@ -25,6 +25,13 @@ const SAMPLE_VARIABLES = {
     firstName: "Jane",
     email: "jane@example.com",
   },
+  "admin-forced-password-reset": {
+    firstName: "Jane",
+    lastName: "Smith",
+    email: "jane@example.com",
+    temporaryPassword: "aB3$xY9!zM2#pQ5&",
+    loginUrl: "https://www.goldengateclassic.org/portal/admin",
+  },
 };
 
 const TABS = ["fields", "html-override", "preview"];

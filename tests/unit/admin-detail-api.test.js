@@ -5,7 +5,7 @@ const path = require("path");
 
 const API_FILE = path.join(
   process.cwd(),
-  "src/pages/api/portal/admins/[id].js"
+  "src/pages/api/portal/admins/[id]/index.js"
 );
 
 const readSource = () => fs.readFileSync(API_FILE, "utf-8");
