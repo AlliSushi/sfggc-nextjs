@@ -209,9 +209,9 @@ create_super_admin() {
   # Count existing admins
   # Must source .env.local first — PORTAL_DATABASE_URL is only in .env.local,
   # not in the SSH session environment
-  local ADMIN_COUNT=$(ssh_command "cd ${DEPLOY_PORTAL_PATH} && source .env.local 2>/dev/null && node -e \"
+  local ADMIN_COUNT=$(ssh_command "cd ${DEPLOY_PORTAL_PATH} && set -a && source .env.local 2>/dev/null && set +a && node -e \"
     const url = process.env.PORTAL_DATABASE_URL || '';
-    if (!url) { console.log('0'); process.exit(0); }
+    if (url === '') { console.log('0'); process.exit(0); }
     const mysql = require('mysql2/promise');
     (async () => {
       try {
