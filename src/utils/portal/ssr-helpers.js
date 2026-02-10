@@ -1,19 +1,18 @@
 import { COOKIE_ADMIN, parseCookies, verifyToken } from "./session.js";
 
 /**
- * Constructs the base URL from a Next.js SSR request object.
+ * Returns the base URL for internal SSR API fetches.
  *
- * Uses the x-forwarded-proto header when available (e.g. behind a reverse
- * proxy) and falls back to "http" for localhost or "https" otherwise.
+ * Always uses http://localhost to call the local Node.js server directly.
+ * This avoids a self-referencing loop through nginx (browser → nginx →
+ * Node.js SSR → nginx HTTPS → Node.js API) which fails when the server
+ * cannot connect to its own public HTTPS endpoint.
  *
- * @param {import("http").IncomingMessage} req - Next.js request object
- * @returns {string} Base URL such as "https://example.com" or "http://localhost:3000"
+ * @returns {string} Internal base URL like "http://localhost:3000"
  */
-const buildBaseUrl = (req) => {
-  const host = req.headers.host;
-  const protocol =
-    req.headers["x-forwarded-proto"] || (host?.includes("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
+const buildBaseUrl = () => {
+  const port = process.env.PORT || 3000;
+  return `http://localhost:${port}`;
 };
 
 const ADMIN_DASHBOARD_PATH = "/portal/admin/dashboard";

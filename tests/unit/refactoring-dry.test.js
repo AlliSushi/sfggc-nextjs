@@ -68,7 +68,7 @@ test(
 // ---------------------------------------------------------------------------
 
 test(
-  "Given ssr-helpers module, when checking source, then it exports a buildBaseUrl function that reads host and protocol headers",
+  "Given ssr-helpers module, when checking source, then buildBaseUrl uses localhost for internal SSR fetches",
   () => {
     const content = readFile("src/utils/portal/ssr-helpers.js");
     assert.ok(
@@ -76,12 +76,8 @@ test(
       "ssr-helpers must define buildBaseUrl"
     );
     assert.ok(
-      content.includes("req.headers.host"),
-      "buildBaseUrl must read the host header"
-    );
-    assert.ok(
-      content.includes('x-forwarded-proto'),
-      "buildBaseUrl must read x-forwarded-proto for reverse proxy support"
+      /return\s.*http:\/\/localhost/.test(content),
+      "buildBaseUrl must return http://localhost URL for internal SSR fetches (avoids self-referencing nginx loop)"
     );
     assert.ok(
       content.includes("export { buildBaseUrl }"),
