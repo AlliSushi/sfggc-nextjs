@@ -2,6 +2,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 const mysql = require("mysql2/promise");
 
+function getSocketPath() {
+  if (process.env.MYSQL_UNIX_SOCKET && fs.existsSync(process.env.MYSQL_UNIX_SOCKET)) {
+    return process.env.MYSQL_UNIX_SOCKET;
+  }
+  const candidates = ["/tmp/mysql.sock", "/opt/homebrew/var/mysql/mysql.sock", "/usr/local/var/mysql/mysql.sock"];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 const findEnvLocal = (startDir) => {
   let current = startDir;
   while (current && current !== path.dirname(current)) {
@@ -60,9 +71,26 @@ const getTestDatabaseUrl = () => {
 const ensureDatabaseExists = async (testUrl) => {
   const url = new URL(testUrl);
   const dbName = url.pathname.replace(/^\//, "");
-  const adminUrl = new URL(testUrl);
-  adminUrl.pathname = "/mysql";
-  const pool = mysql.createPool({ uri: adminUrl.toString(), multipleStatements: true });
+  const host = url.hostname || "localhost";
+  const hasPassword = !!url.password;
+  const socketPath = getSocketPath();
+  const useSocket = (host === "localhost" || host === "127.0.0.1") && !hasPassword && socketPath;
+
+  let pool;
+  if (useSocket) {
+    const user = url.username === "root" ? process.env.USER : url.username;
+    pool = mysql.createPool({
+      user: user || url.username,
+      database: "mysql",
+      socketPath,
+      multipleStatements: true,
+    });
+  } else {
+    const adminUrl = new URL(testUrl);
+    adminUrl.pathname = "/mysql";
+    pool = mysql.createPool({ uri: adminUrl.toString(), multipleStatements: true });
+  }
+
   try {
     const [rows] = await pool.query(
       "select 1 from information_schema.schemata where schema_name = ?",
@@ -83,9 +111,12 @@ const applySchema = async (pool) => {
 };
 
 const dropAll = async (pool) => {
+  // Disable foreign key checks to allow dropping tables in any order
+  await pool.query("set foreign_key_checks = 0");
   await pool.query(
-    "drop table if exists audit_logs, scores, doubles_pairs, people, teams, participant_login_tokens, admin_actions, admin_password_resets, admins"
+    "drop table if exists audit_logs, scores, doubles_pairs, people, teams, participant_login_tokens, admin_actions, admin_password_resets, admins, email_templates"
   );
+  await pool.query("set foreign_key_checks = 1");
 };
 
 const truncateAll = async (pool) => {
@@ -106,7 +137,28 @@ const initTestDb = async () => {
   }
   await ensureDatabaseExists(testUrl);
   process.env.PORTAL_DATABASE_URL = testUrl;
-  const pool = mysql.createPool({ uri: testUrl, multipleStatements: true });
+
+  // Auto-detect socket connection for localhost without password
+  const url = new URL(testUrl);
+  const host = url.hostname || "localhost";
+  const hasPassword = !!url.password;
+  const socketPath = getSocketPath();
+  const useSocket = (host === "localhost" || host === "127.0.0.1") && !hasPassword && socketPath;
+
+  let pool;
+  if (useSocket) {
+    const user = url.username === "root" ? process.env.USER : url.username;
+    const database = url.pathname.replace(/^\//, "") || "mysql";
+    pool = mysql.createPool({
+      user: user || url.username,
+      database,
+      socketPath,
+      multipleStatements: true,
+    });
+  } else {
+    pool = mysql.createPool({ uri: testUrl, multipleStatements: true });
+  }
+
   await dropAll(pool);
   await applySchema(pool);
   return {

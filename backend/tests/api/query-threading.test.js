@@ -126,8 +126,11 @@ test(
     const calls = [];
     const mockQuery = async (sql, params = []) => {
       const trimmed = sql.trim();
-      calls.push(trimmed.slice(0, 60));
-      if (trimmed.startsWith("select * from people")) {
+      const lower = trimmed.toLowerCase();
+      calls.push(trimmed); // Store full SQL for assertion checking
+
+      // Handle the optimized JOIN query (first query)
+      if (lower.includes("from people p") && lower.includes("left join")) {
         return {
           rows: [
             {
@@ -143,13 +146,32 @@ test(
               country: "US",
               tnmt_id: "2305",
               did: "1076",
+              // JOIN columns
+              team_tnmt_id: "2305",
+              team_name: "Well, No Split!",
+              team_slug: "well-no-split",
+              doubles_did: "1076",
+              partner_pid: null,
+              doubles_partner_first_name: null,
+              doubles_partner_last_name: null,
+              partner1_pid: null,
+              partner1_first_name: null,
+              partner1_last_name: null,
+              partner1_nickname: null,
+              partner2_pid: null,
+              partner2_first_name: null,
+              partner2_last_name: null,
+              partner2_nickname: null,
             },
           ],
         };
       }
-      if (trimmed.startsWith("select * from teams")) {
-        return { rows: [{ team_name: "Well, No Split!", slug: "well-no-split" }] };
+
+      // Handle scores query (second query)
+      if (trimmed.startsWith("select * from scores")) {
+        return { rows: [] };
       }
+
       return { rows: [] };
     };
 
@@ -158,10 +180,9 @@ test(
     assert.ok(result, "formatParticipant should return a participant object");
     assert.equal(result.pid, "3336");
     assert.equal(result.firstName, "Robert");
-    assert.ok(calls.length >= 4, `Expected at least 4 queries but got ${calls.length}`);
-    assert.ok(calls.some((sql) => sql.includes("select * from people")));
-    assert.ok(calls.some((sql) => sql.includes("select * from teams")));
-    assert.ok(calls.some((sql) => sql.includes("select * from doubles_pairs")));
+    // Optimized version makes 2 queries: 1 JOIN + 1 scores query
+    assert.ok(calls.length <= 2, `Expected at most 2 queries but got ${calls.length}`);
+    assert.ok(calls.some((sql) => sql.toLowerCase().includes("select") && sql.toLowerCase().includes("from people p")));
     assert.ok(calls.some((sql) => sql.includes("select * from scores")));
   }
 );
@@ -191,8 +212,10 @@ test(
     const calls = [];
     const mockQuery = async (sql, params = []) => {
       const trimmed = sql.trim();
-      calls.push({ sql: trimmed.slice(0, 60), params });
-      if (trimmed.startsWith("select * from people where pid") && params[0] === "3336") {
+      calls.push({ sql: trimmed, params }); // Store full SQL for assertion checking
+
+      // Handle the optimized JOIN query
+      if (trimmed.toLowerCase().includes("from people p") && trimmed.toLowerCase().includes("left join") && params[0] === "3336") {
         return {
           rows: [
             {
@@ -208,18 +231,33 @@ test(
               country: "US",
               tnmt_id: null,
               did: "1076",
+              // JOIN columns with partner data
+              team_tnmt_id: null,
+              team_name: null,
+              team_slug: null,
+              doubles_did: "1076",
+              partner_pid: "1076",
+              doubles_partner_first_name: null,
+              doubles_partner_last_name: null,
+              // Partner resolved via dp.partner_pid -> partner1
+              partner1_pid: "1076",
+              partner1_first_name: "Dan",
+              partner1_last_name: "Fahy",
+              partner1_nickname: null,
+              partner2_pid: null,
+              partner2_first_name: null,
+              partner2_last_name: null,
+              partner2_nickname: null,
             },
           ],
         };
       }
-      if (trimmed.startsWith("select * from doubles_pairs")) {
-        return { rows: [{ did: "1076", pid: "3336", partner_pid: "1076" }] };
+
+      // Handle scores query
+      if (trimmed.startsWith("select * from scores")) {
+        return { rows: [] };
       }
-      if (trimmed.startsWith("select * from people") && params[0] === "1076") {
-        return {
-          rows: [{ pid: "1076", first_name: "Dan", last_name: "Fahy" }],
-        };
-      }
+
       return { rows: [] };
     };
 
@@ -227,10 +265,13 @@ test(
 
     assert.equal(result.doubles.partnerPid, "1076");
     assert.equal(result.doubles.partnerName, "Dan Fahy");
-    // The partner lookup should have gone through our mock
+    // The optimized version resolves partner via JOIN in the main query
     assert.ok(
-      calls.some((c) => c.sql.includes("select * from people") && c.params[0] === "1076"),
-      "Partner lookup must use the custom query"
+      calls.some((c) => {
+        const sqlLower = c.sql.toLowerCase();
+        return sqlLower.includes("select") && sqlLower.includes("from people p") && sqlLower.includes("left join");
+      }),
+      "Partner lookup must use the custom query via JOIN"
     );
   }
 );
