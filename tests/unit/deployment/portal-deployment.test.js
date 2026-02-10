@@ -892,6 +892,28 @@ test(
   }
 );
 
+// ─── HIGH: Admin check must source .env.local ───────────────────────────────
+
+test(
+  "Given create_super_admin function, when counting admins, then it sources .env.local before running node",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+    const funcMatch = content.match(
+      /create_super_admin\(\) \{[\s\S]*?^}/m
+    );
+    assert.ok(funcMatch, "create_super_admin function must exist");
+    const funcBody = funcMatch[0];
+
+    // The node -e script runs via SSH. PORTAL_DATABASE_URL is only in .env.local,
+    // not in the SSH session environment. Without sourcing .env.local first,
+    // process.env.PORTAL_DATABASE_URL is empty and the check always returns 0.
+    assert.ok(
+      funcBody.match(/source\s+\.env\.local/) || funcBody.match(/source\s+\$\{?DEPLOY_PORTAL_PATH/),
+      "create_super_admin must source .env.local before running node -e to make PORTAL_DATABASE_URL available"
+    );
+  }
+);
+
 // ─── HIGH: Health check redirect handling ───────────────────────────────────
 
 test(
