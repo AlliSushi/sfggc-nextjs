@@ -317,6 +317,36 @@ Check SMTP credentials in `.env.local`, verify SMTP host/port, test connection:
 ssh user@server "cd /path/to/portal && node backend/scripts/test-smtp.sh"
 ```
 
+## SSH Inline Node.js Scripts
+
+When running `node -e` via SSH that reads `.env.local`:
+
+**Problem:** `.env.local` uses plain assignment (`KEY=value`, no `export`), so `source` alone does not export vars to child processes like `node`.
+
+**Pattern:**
+```bash
+ssh_command "cd $PORTAL_PATH && set -a && source .env.local 2>/dev/null && set +a && node -e \"
+    const db = require('./src/utils/portal/db.js');
+    // ... script
+\""
+```
+
+**Rules:**
+1. `set -a` before `source`, `set +a` after -- auto-exports all sourced variables
+2. Avoid `!` operator in inline scripts -- SSH layers escape it to `\!`. Use `=== ''` or `=== undefined` instead
+3. Wrap `node -e` script in escaped double quotes inside the SSH command string
+4. Always `2>/dev/null` on source to suppress missing-file warnings in dry-run
+
+**Deploy verification example (check admin account exists):**
+```bash
+ssh_command "cd $PATH && set -a && source .env.local 2>/dev/null && set +a && node -e \"
+    const { query, closePool } = require('./src/utils/portal/db.js');
+    query('SELECT COUNT(*) as count FROM admins WHERE role = ?', ['super-admin'])
+      .then(([rows]) => { console.log(rows[0].count > 0 ? 'EXISTS' : 'MISSING'); })
+      .finally(() => closePool());
+\""
+```
+
 ## Deployment Script Structure
 
 **Entry point:** `deploy_scripts/deploy.sh`
@@ -346,31 +376,65 @@ ssh user@server "cd /path/to/portal && node backend/scripts/test-smtp.sh"
 
 ### Nginx Configuration Workflow
 
-**File:** `backend/config/vhost.txt` (lines 34-68 contain portal proxy configuration)
+**File:** `backend/config/vhost.txt`
 
 **Process:**
 1. Edit `backend/config/vhost.txt` locally
-2. Copy file contents to clipboard
-3. Access ISP control panel vhost configuration page
-4. Paste updated configuration
-5. Save/apply in control panel
+2. Copy to clipboard: `cat backend/config/vhost.txt | pbcopy`
+3. Log into CloudPanel ISP portal → nginx/vhost configuration
+4. Paste entire contents and save (panel validates and reloads nginx)
 
 **Do NOT suggest:**
 - SSH nginx commands (`nginx -t`, `systemctl reload nginx`, etc.)
 - Direct editing of `/etc/nginx/` files
 - Server-side nginx configuration changes
 
-**Existing configuration includes:**
-- Portal proxying (`/portal`, `/api/portal`, `/_next` → port 3000)
-- Static site serving (root location `/`)
-- SSL/HTTPS redirects
-- Cache headers for static assets
+### Nginx ^~ Modifier Requirement
+
+**CRITICAL:** All portal proxy prefix locations MUST use `^~` modifier.
+
+**Why:** Nginx regex `location ~* \.(js|css|...)$` overrides plain prefix locations. Without `^~`, `/_next/static/*.js` matches the static asset regex instead of the proxy block, returning 404 for all JS bundles. This breaks React hydration entirely -- client-side JS never loads, `useEffect`/`useAdminSession` never run, interactive features are invisible.
+
+**Required pattern in `backend/config/vhost.txt`:**
+```nginx
+location ^~ /portal { proxy_pass ...; }
+location ^~ /api/portal { proxy_pass ...; }
+location ^~ /_next/static { alias ...; }
+location ^~ /_next { proxy_pass ...; }
+```
+
+**Nginx location priority (highest to lowest):**
+
+| Type | Example | Behavior |
+|---|---|---|
+| `= /path` | Exact match | Checked first |
+| `^~ /prefix` | Prefix, suppresses regex | Checked second, stops regex check |
+| `~* \.js$` | Regex (case-insensitive) | Checked third, overrides plain prefix |
+| `/prefix` | Plain prefix | Lowest priority |
+
+### Nginx Upstream Keepalive
+
+Use `upstream` block with `keepalive` for persistent connections to Node.js (saves 20-50ms TCP handshake per request):
+
+```nginx
+upstream portal_backend {
+  server 127.0.0.1:3000;
+  keepalive 16;
+}
+```
+
+**Required proxy headers for keepalive:**
+- `proxy_http_version 1.1;`
+- `proxy_set_header Connection "";` (NOT `"upgrade"` -- that forces per-request upgrade and defeats keepalive)
+
+### Nginx Gzip and next.config.js
+
+When nginx handles gzip compression, set `compress: false` in `next.config.js` to avoid double-compression. Current config already does this -- do not re-enable.
 
 **When suggesting nginx changes:**
 1. Provide exact text for `backend/config/vhost.txt`
 2. Highlight changed lines
 3. Explain what to copy/paste in control panel
-4. Reference line numbers for portal proxy section (34-68)
 
 ## Key Files Reference
 

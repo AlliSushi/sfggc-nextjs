@@ -202,6 +202,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 | **Calculated fields** | Never store manually editable calculated values | Handicap = `Math.floor((225 - avg) * 0.9)` calculated in `upsertScores`, not UI |
 | **XML attribute parsing** | fast-xml-parser stores attributes as `{'#text': value, '@_attr': attrValue}` | `person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE` |
 | **Database migrations** | Must be idempotent, check existence before applying | Query `information_schema` before ALTER, clean duplicates before adding constraints |
+| **No correlated subqueries** | Use LEFT JOIN for list endpoints, never SELECT subqueries | See `CLAUDE-PATTERNS.md#N+1 Correlated Subqueries -> LEFT JOINs` |
 
 **Migration Requirements:**
 - Executable script in `backend/scripts/migrations/`
@@ -296,9 +297,13 @@ Most components are sections with:
 - All migrations run automatically during portal deployment
 - See `deploy_docs/MIGRATIONS.md` for migration system details
 
+**Server Configuration:**
+- `backend/config/vhost.txt` - Nginx vhost config (deployed via CloudPanel ISP portal, NOT direct SSH). See `CLAUDE-DEPLOYMENT.md#Nginx Configuration Workflow`
+- `next.config.js` - `compress: false` (nginx handles gzip). See `CLAUDE-PATTERNS.md#Compress: false in next.config.js`
+
 **Documentation:**
-- `CLAUDE-PATTERNS.md` - Reusable code patterns (session management, password security, API routes, migrations, testing)
-- `CLAUDE-DEPLOYMENT.md` - Deployment patterns, credential handling, CI/CD, critical gotchas
+- `CLAUDE-PATTERNS.md` - Reusable code patterns (session management, password security, API routes, migrations, SQL performance, nginx)
+- `CLAUDE-DEPLOYMENT.md` - Deployment patterns, credential handling, nginx `^~` rules, SSH inline scripts, CI/CD, critical gotchas
 - `portal_docs/portal_architecture.md` - Complete portal architecture
 - `portal_docs/portal_database_architecture.md` - Database design details
 - `deploy_docs/DEPLOYMENT.md` - Deployment guide

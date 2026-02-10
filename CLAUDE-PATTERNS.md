@@ -414,6 +414,76 @@ await query(
 
 **Files:** `src/utils/portal/audit.js`, API routes in `src/pages/api/portal/admin/`
 
+## SQL Performance Patterns
+
+### N+1 Correlated Subqueries -> LEFT JOINs
+
+**Problem:** Correlated subqueries execute once per row, causing O(n) query overhead.
+
+**Anti-pattern (6 subqueries per row):**
+```sql
+SELECT p.*,
+  (SELECT team_name FROM teams WHERE tnmt_id = p.tnmt_id) AS team_name,
+  (SELECT slug FROM teams WHERE tnmt_id = p.tnmt_id) AS team_slug,
+  (SELECT CONCAT(first_name, ' ', last_name) FROM people WHERE pid = dp.partner_pid) AS partner_name
+FROM people p
+LEFT JOIN doubles_pairs dp ON p.pid = dp.pid;
+```
+
+**Correct (single pass with LEFT JOINs):**
+```sql
+SELECT p.*,
+  t.team_name, t.slug AS team_slug,
+  CONCAT(partner.first_name, ' ', partner.last_name) AS partner_name
+FROM people p
+LEFT JOIN teams t ON p.tnmt_id = t.tnmt_id
+LEFT JOIN doubles_pairs dp ON p.pid = dp.pid
+LEFT JOIN people partner ON dp.partner_pid = partner.pid;
+```
+
+**Rule:** Never use correlated subqueries in SELECT clause for list endpoints. Always use LEFT JOIN.
+
+**File:** `src/utils/portal/participant-db.js` -- `getParticipants()` uses LEFT JOINs.
+
+### Sequential SSR Fetch Consolidation
+
+**Problem:** `getServerSideProps` making multiple sequential API calls (each adds network latency).
+
+**Pattern:** When a page needs data from multiple endpoints, add secondary data to the primary endpoint response rather than making N sequential fetches from SSR.
+
+**Anti-pattern:**
+```javascript
+export async function getServerSideProps(context) {
+  const participants = await fetch('/api/portal/participants');
+  const teams = await fetch('/api/portal/teams');         // +100ms
+  const scores = await fetch('/api/portal/scores');       // +100ms
+  // ...
+}
+```
+
+**Correct:** Include related data in the primary query via JOINs, or add query parameters to expand the response.
+
+## Nginx Performance Patterns
+
+### Upstream Keepalive
+
+See `CLAUDE-DEPLOYMENT.md#Nginx Upstream Keepalive` for configuration.
+
+**Key rule:** Use `Connection ""` (empty string) for keepalive, NOT `Connection "upgrade"`. The upgrade header forces per-request connection upgrade, defeating persistent connections.
+
+### Compress: false in next.config.js
+
+When nginx handles gzip (via `gzip on` in server config), disable Next.js compression to avoid double-compression:
+
+```javascript
+// next.config.js
+const nextConfig = {
+  compress: false,  // nginx handles gzip -- do not re-enable
+};
+```
+
+**Current state:** Already configured. See `CLAUDE-DEPLOYMENT.md#Nginx Gzip and next.config.js`.
+
 ## Performance Tradeoff Documentation
 
 **Pattern:** Document deliberate performance tradeoffs in comments and CLAUDE.md.
