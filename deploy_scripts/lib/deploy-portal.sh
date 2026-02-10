@@ -343,10 +343,11 @@ validate_server_config() {
     log_info "Server config has 'output: export' - portal requires server mode"
     log_info "Fixing server configuration..."
 
-    # Create server-mode config on server
+    # Create server-mode config on server (compress: false lets nginx handle compression)
     ssh_command "cd ${DEPLOY_PORTAL_PATH} && cat > next.config.js << 'EOF'
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  compress: false,
   images: {
     unoptimized: true
   }

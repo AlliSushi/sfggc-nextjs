@@ -153,10 +153,11 @@ build_portal_local() {
 
     backup_next_config
 
-    # Create server-mode config
+    # Create server-mode config (compress: false lets nginx handle compression)
     cat > next.config.js << 'EOF'
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  compress: false,
   images: {
     unoptimized: true
   }
@@ -245,6 +246,7 @@ ensure_server_mode_config() {
     cat > next.config.js << 'EOF'
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  compress: false,
   images: {
     unoptimized: true
   }
