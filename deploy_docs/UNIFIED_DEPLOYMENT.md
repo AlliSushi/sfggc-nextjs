@@ -523,7 +523,9 @@ Portal returns 502 Bad Gateway
 **Solution:**
 1. Check PM2 status: `pm2 status sfggc-portal`
 2. Check nginx configuration (must proxy /portal to port 3000)
-3. See `deploy_docs/PORTAL_DEPLOYMENT.md#7-nginx-configuration`
+3. Verify proxy configuration in `backend/config/vhost.txt`
+4. See `deploy_docs/PORTAL_DEPLOYMENT.md#7-nginx-configuration`
+5. For ISP-controlled nginx, see `deploy_docs/DEPLOYMENT.md#nginx-configuration-management`
 
 ### First-Time Setup Prompts Don't Appear
 
@@ -826,7 +828,8 @@ The old scripts have been converted to wrappers that forward to the new system w
 
 - **Portal Deployment Details:** `deploy_docs/PORTAL_DEPLOYMENT.md`
 - **Server Setup:** `deploy_docs/SERVER_SETUP.md`
-- **Nginx Configuration:** `deploy_docs/NGINX_SETUP.md`
+- **Nginx Configuration (Direct Access):** `deploy_docs/NGINX_SETUP.md`
+- **Nginx Configuration (ISP-Controlled):** `deploy_docs/DEPLOYMENT.md#nginx-configuration-management`
 - **CloudPanel Guide:** `deploy_docs/CLOUDPANEL_NGINX_GUIDE.md`
 
 ---

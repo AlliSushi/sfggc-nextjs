@@ -421,6 +421,65 @@ test(
 );
 
 test(
+  "Given build_portal_on_server function, when removing old build directories, then it removes both .next and out directories before building",
+  () => {
+    const content = readFile("deploy_scripts/lib/deploy-portal.sh");
+
+    // Function exists
+    assert.ok(
+      content.includes("build_portal_on_server()"),
+      "deploy-portal.sh must define build_portal_on_server function"
+    );
+
+    // Get function body
+    const buildFuncMatch = content.match(
+      /build_portal_on_server\(\) \{[\s\S]*?^}/m
+    );
+    assert.ok(buildFuncMatch, "build_portal_on_server function must exist");
+
+    const funcBody = buildFuncMatch[0];
+    const lines = funcBody.split("\n");
+
+    // Find line indices
+    let rmIndex = -1;
+    let buildIndex = -1;
+
+    lines.forEach((line, idx) => {
+      if (line.includes("rm -rf") && (line.includes(".next") || line.includes("out"))) {
+        rmIndex = idx;
+      }
+      if (line.includes("npm run build")) {
+        buildIndex = idx;
+      }
+    });
+
+    // Must remove old build directories
+    assert.ok(
+      rmIndex >= 0,
+      "build_portal_on_server must remove old build directories"
+    );
+
+    // Must remove BOTH .next and out
+    assert.ok(
+      funcBody.includes("rm -rf .next out") ||
+      (funcBody.includes("rm -rf .next") && funcBody.includes("rm -rf out")),
+      "build_portal_on_server must remove both .next and out directories (prevents stale export mode cache)"
+    );
+
+    // Removal must happen BEFORE build
+    assert.ok(
+      buildIndex >= 0,
+      "build_portal_on_server must run npm run build"
+    );
+
+    assert.ok(
+      rmIndex < buildIndex,
+      "build_portal_on_server must remove old build directories BEFORE running npm run build"
+    );
+  }
+);
+
+test(
   "Given manage_pm2 function, when checking source, then it installs PM2 if missing",
   () => {
     const content = readFile("deploy_scripts/lib/deploy-portal.sh");

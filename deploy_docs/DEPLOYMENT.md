@@ -253,6 +253,9 @@ If you're using Nginx instead of Apache, you'll need to configure nginx to serve
 **For manual nginx configuration:**
 - See [NGINX_SETUP.md](NGINX_SETUP.md) for complete nginx configuration instructions
 
+**For ISP-controlled nginx (no direct SSH access to nginx):**
+- See the [Nginx Configuration Management](#nginx-configuration-management) section below for the copy/paste workflow
+
 ### 6. Test Your Deployment
 
 1. **Visit your website**: Open your domain in a browser
@@ -310,6 +313,7 @@ If you're using Nginx instead of Apache, you'll need to configure nginx to serve
 - If using nginx, check nginx configuration (see [NGINX_SETUP.md](NGINX_SETUP.md))
 - Verify nginx is configured to serve static files, not proxy to a Node.js app
 - Check nginx error logs: `sudo tail -f /var/log/nginx/error.log`
+- For ISP-controlled nginx, see [Nginx Configuration Management](#nginx-configuration-management)
 
 ### 8. Updating Your Website
 
@@ -359,6 +363,233 @@ If you encounter issues:
 2. Verify file permissions
 3. Test with a simple HTML file first
 4. Contact your hosting provider if needed
+
+## Nginx Configuration Management
+
+This section applies when you do NOT have direct SSH access to nginx (ISP-controlled hosting with web-based control panel).
+
+### Overview
+
+**Configuration File Location:** `/Volumes/Keiki/Users/jfunson/source/Cursor/sfggc/sfggc-nextjs/backend/config/vhost.txt`
+
+This file contains the complete nginx vhost configuration for the SFGGC website, including both the static site and portal application proxy settings.
+
+### When to Update Nginx Configuration
+
+You need to update nginx configuration when:
+- Adding new portal routes or API endpoints
+- Changing proxy settings (port, headers, timeouts)
+- Modifying caching rules for static assets
+- Adding new location blocks or redirects
+- Troubleshooting 502/503 errors on the portal
+
+### Configuration Management Workflow
+
+Since you cannot run nginx commands directly (no `nginx -t`, `systemctl reload nginx`, etc.), use this workflow:
+
+**1. Edit Configuration Locally**
+
+```bash
+# Navigate to the config directory
+cd /Volumes/Keiki/Users/jfunson/source/Cursor/sfggc/sfggc-nextjs/backend/config
+
+# Edit the vhost configuration file
+nano vhost.txt  # or vim, code, etc.
+```
+
+**2. Copy Configuration to Clipboard**
+
+```bash
+# macOS
+cat vhost.txt | pbcopy
+
+# Linux (requires xclip)
+cat vhost.txt | xclip -selection clipboard
+
+# Windows (WSL)
+cat vhost.txt | clip.exe
+
+# Manual alternative: Select all text in editor and copy
+```
+
+**3. Paste in ISP Control Panel**
+
+1. Log into your ISP's web-based control panel
+2. Navigate to the nginx/vhost configuration section for your domain
+3. Clear the existing configuration
+4. Paste the clipboard contents
+5. Save the configuration
+
+The ISP control panel will automatically:
+- Validate the nginx syntax
+- Reload nginx if valid
+- Display errors if invalid
+
+**4. Test the Changes**
+
+```bash
+# Test static site
+curl -I https://www.goldengateclassic.org/
+
+# Test portal (should proxy to Node.js on port 3000)
+curl -I https://www.goldengateclassic.org/portal
+
+# Test portal API
+curl -I https://www.goldengateclassic.org/api/portal/health
+```
+
+**5. Commit Configuration Changes**
+
+```bash
+# Stage the vhost.txt file
+git add backend/config/vhost.txt
+
+# Commit with descriptive message
+git commit -m "Update nginx config: [describe changes]"
+
+# Push to repository
+git push origin main
+```
+
+### Configuration File Structure
+
+The `backend/config/vhost.txt` file contains three main sections:
+
+**Lines 1-33: Server Block Setup**
+- SSL certificates (CloudPanel placeholders)
+- HTTP to HTTPS redirect
+- Basic server settings
+
+**Lines 34-68: Portal Application Proxy** (Critical for portal functionality)
+```nginx
+# Portal pages (lines 39-49)
+location /portal {
+  proxy_pass http://127.0.0.1:3000;
+  # ... proxy headers ...
+}
+
+# Portal API routes (lines 52-59)
+location /api/portal {
+  proxy_pass http://127.0.0.1:3000;
+  # ... proxy headers ...
+}
+
+# Next.js assets (lines 62-68)
+location /_next {
+  proxy_pass http://127.0.0.1:3000;
+  # ... caching headers ...
+}
+```
+
+**Lines 70-89: Static Site Configuration**
+- Static file serving
+- Caching for images, CSS, JS
+- 404 error handling
+
+### Common Configuration Tasks
+
+**Add a New Portal Route:**
+No changes needed. The existing `/portal` location block catches all portal routes.
+
+**Change Portal Port:**
+If the Node.js app runs on a different port:
+```nginx
+# Find all instances of 127.0.0.1:3000
+# Replace with new port (e.g., 127.0.0.1:3001)
+location /portal {
+  proxy_pass http://127.0.0.1:3001;  # Changed from 3000
+  # ...
+}
+```
+
+**Add Custom Headers:**
+```nginx
+location /portal {
+  proxy_pass http://127.0.0.1:3000;
+  # ... existing headers ...
+  proxy_set_header X-Custom-Header "value";
+}
+```
+
+**Increase Timeout for Long Requests:**
+```nginx
+location /api/portal {
+  proxy_pass http://127.0.0.1:3000;
+  # ... existing headers ...
+  proxy_read_timeout 300s;
+  proxy_connect_timeout 300s;
+}
+```
+
+### What NOT to Do
+
+**Do not attempt these commands** (they require direct SSH access to nginx):
+```bash
+# These will fail without nginx permissions:
+nginx -t                    # Test configuration syntax
+systemctl reload nginx      # Reload nginx
+systemctl restart nginx     # Restart nginx
+sudo vim /etc/nginx/...     # Edit nginx files directly
+```
+
+### Troubleshooting
+
+**Configuration Rejected by ISP Panel:**
+- Check for syntax errors (missing semicolons, braces)
+- Verify CloudPanel placeholders are preserved: `{{root}}`, `{{ssl_certificate}}`, etc.
+- Test locally if you have nginx installed: `nginx -t -c vhost.txt` (optional, won't catch placeholder issues)
+
+**Portal Returns 502 Bad Gateway:**
+1. Check that Node.js app is running: `ssh server "pm2 status sfggc-portal"`
+2. Verify proxy_pass port matches app port (default: 3000)
+3. Check app logs: `ssh server "pm2 logs sfggc-portal"`
+
+**Static Site Works But Portal Doesn't:**
+1. Verify the portal proxy configuration is present (lines 34-68)
+2. Check that Node.js app is running (see above)
+3. Test portal URL directly: `curl -v https://domain/portal`
+
+**Changes Not Taking Effect:**
+1. Verify you saved changes in ISP control panel
+2. Check if ISP panel reported errors during save
+3. Wait 30-60 seconds for nginx reload to complete
+4. Clear browser cache and test again
+
+### Version Control Best Practices
+
+**Always commit configuration changes:**
+```bash
+# Good commit messages:
+git commit -m "Add timeout settings for portal API routes"
+git commit -m "Update proxy port from 3000 to 3001"
+git commit -m "Add caching headers for portal assets"
+
+# Bad commit messages:
+git commit -m "Update config"
+git commit -m "Fix nginx"
+```
+
+**Document breaking changes:**
+If your nginx config change requires a corresponding code change, document it in the commit message:
+```bash
+git commit -m "Change portal API prefix from /api/portal to /api/v1
+
+BREAKING CHANGE: Requires updating API route files:
+- src/pages/api/portal/*.js -> src/pages/api/v1/*.js
+- Update all fetch() calls in frontend components"
+```
+
+### Reference Configuration
+
+The current production configuration is maintained in:
+- **File:** `/Volumes/Keiki/Users/jfunson/source/Cursor/sfggc/sfggc-nextjs/backend/config/vhost.txt`
+- **Repository:** `sfggc-nextjs`
+- **Branch:** `main`
+
+Always pull the latest version before making changes:
+```bash
+git pull origin main
+```
 
 ## Portal Backend
 

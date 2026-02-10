@@ -319,6 +319,38 @@ ssh user@server "cd /path/to/portal && node backend/scripts/test-smtp.sh"
 
 **Each prompt checks `[ ! -t 0 ]` before calling `read`.**
 
+## Server Configuration: Nginx Management
+
+**Critical:** User does NOT have direct nginx access. All nginx configuration changes MUST follow this workflow.
+
+### Nginx Configuration Workflow
+
+**File:** `backend/config/vhost.txt` (lines 34-68 contain portal proxy configuration)
+
+**Process:**
+1. Edit `backend/config/vhost.txt` locally
+2. Copy file contents to clipboard
+3. Access ISP control panel vhost configuration page
+4. Paste updated configuration
+5. Save/apply in control panel
+
+**Do NOT suggest:**
+- SSH nginx commands (`nginx -t`, `systemctl reload nginx`, etc.)
+- Direct editing of `/etc/nginx/` files
+- Server-side nginx configuration changes
+
+**Existing configuration includes:**
+- Portal proxying (`/portal`, `/api/portal`, `/_next` → port 3000)
+- Static site serving (root location `/`)
+- SSL/HTTPS redirects
+- Cache headers for static assets
+
+**When suggesting nginx changes:**
+1. Provide exact text for `backend/config/vhost.txt`
+2. Highlight changed lines
+3. Explain what to copy/paste in control panel
+4. Reference line numbers for portal proxy section (34-68)
+
 ## Key Files Reference
 
 - `deploy_scripts/deploy.sh` - Main deployment script
@@ -326,6 +358,7 @@ ssh user@server "cd /path/to/portal && node backend/scripts/test-smtp.sh"
 - `.deployrc.example` - Production configuration template
 - `deploy_docs/DEPLOYMENT.md` - User-facing deployment guide
 - `deploy_docs/UNIFIED_DEPLOYMENT.md` - Complete technical documentation
+- `backend/config/vhost.txt` - Nginx configuration (deployed via ISP control panel)
 
 ## Token Count Optimization
 

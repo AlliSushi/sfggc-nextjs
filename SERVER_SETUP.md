@@ -116,6 +116,99 @@ ssh goldengateclassic@54.70.1.215 "groups goldengateclassic"
 ssh goldengateclassic@54.70.1.215 "whoami && pwd"
 ```
 
+## Nginx Configuration Management
+
+This project uses nginx for serving the static site and proxying requests to the portal application. However, you may not have direct SSH access to nginx configuration files.
+
+### Configuration File Location
+
+The nginx vhost configuration is maintained in version control:
+
+**File:** `backend/config/vhost.txt`
+
+This file contains:
+- Static site serving configuration
+- Portal proxy configuration (lines 34-68)
+  - `/portal` → http://127.0.0.1:3000
+  - `/api/portal` → http://127.0.0.1:3000
+  - `/_next` → http://127.0.0.1:3000
+- SSL and caching settings
+
+### Configuration Workflow
+
+Since you cannot run nginx commands directly (no `nginx -t`, `systemctl reload nginx`), use this workflow:
+
+1. **Edit configuration locally:**
+   ```bash
+   cd backend/config
+   nano vhost.txt  # or your preferred editor
+   ```
+
+2. **Copy to clipboard:**
+   ```bash
+   # macOS
+   cat vhost.txt | pbcopy
+
+   # Linux
+   cat vhost.txt | xclip -selection clipboard
+   ```
+
+3. **Paste in ISP control panel:**
+   - Log into web-based control panel
+   - Navigate to nginx/vhost configuration
+   - Replace existing configuration
+   - Save (panel validates and reloads automatically)
+
+4. **Verify changes:**
+   ```bash
+   # Test static site
+   curl -I https://www.goldengateclassic.org/
+
+   # Test portal proxy
+   curl -I https://www.goldengateclassic.org/portal
+   ```
+
+5. **Commit changes:**
+   ```bash
+   git add backend/config/vhost.txt
+   git commit -m "Update nginx config: [describe changes]"
+   git push origin main
+   ```
+
+### What NOT to Do
+
+Do NOT attempt these commands (they require direct nginx access):
+```bash
+nginx -t                    # Won't work without nginx permissions
+systemctl reload nginx      # Won't work without sudo
+sudo vim /etc/nginx/...     # Won't work without nginx access
+```
+
+### Troubleshooting Nginx Issues
+
+**Portal returns 502 Bad Gateway:**
+1. Verify Node.js app is running: `pm2 status sfggc-portal`
+2. Check proxy configuration in `backend/config/vhost.txt` (lines 34-68)
+3. Verify proxy port matches app port (default: 3000)
+4. Check app logs: `pm2 logs sfggc-portal`
+
+**Static site works but portal doesn't:**
+1. Check portal proxy configuration exists (lines 34-68)
+2. Verify Node.js app is running
+3. Test portal URL: `curl -v https://domain/portal`
+
+**Configuration rejected by ISP panel:**
+1. Check for syntax errors (missing semicolons, braces)
+2. Preserve CloudPanel placeholders: `{{root}}`, `{{ssl_certificate}}`, etc.
+3. Review error message from ISP panel
+
+### Detailed Documentation
+
+For complete nginx configuration management documentation, see:
+- **ISP-Controlled Nginx:** `deploy_docs/DEPLOYMENT.md#nginx-configuration-management`
+- **Direct Nginx Access:** `deploy_docs/NGINX_SETUP.md`
+- **CloudPanel-Specific:** `deploy_docs/CLOUDPANEL_NGINX_GUIDE.md`
+
 ## Common Issues and Solutions
 
 1. **"Operation not permitted"**: Directory ownership or permissions issue
@@ -123,8 +216,10 @@ ssh goldengateclassic@54.70.1.215 "whoami && pwd"
 3. **"No space left on device"**: Server is out of disk space
 4. **"Connection refused"**: SSH service not running or firewall blocking
 5. **Nginx errors (502/503)**: Nginx may be configured to proxy instead of serving static files
-   - See [NGINX_SETUP.md](deploy_docs/NGINX_SETUP.md) for nginx configuration
-   - See [CLOUDPANEL_STATIC_NGINX.md](deploy_docs/CLOUDPANEL_STATIC_NGINX.md) for CloudPanel-specific fixes
+   - See `backend/config/vhost.txt` for current configuration
+   - See `deploy_docs/DEPLOYMENT.md#nginx-configuration-management` for ISP-controlled nginx
+   - See `deploy_docs/NGINX_SETUP.md` for direct nginx access
+   - See `deploy_docs/CLOUDPANEL_STATIC_NGINX.md` for CloudPanel-specific fixes
 
 ## Next Steps
 

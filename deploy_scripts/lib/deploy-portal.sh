@@ -361,8 +361,9 @@ build_portal_on_server() {
   validate_server_config || return 1
 
   # Remove old build to force fresh build with correct config
-  log_info "Removing old build directory..."
-  ssh_command "cd ${DEPLOY_PORTAL_PATH} && rm -rf .next"
+  # Remove both .next (server mode) and out (export mode) directories
+  log_info "Removing old build directories..."
+  ssh_command "cd ${DEPLOY_PORTAL_PATH} && rm -rf .next out"
 
   log_info "Running build with validated config..."
   ssh_command "cd ${DEPLOY_PORTAL_PATH} && npm run build 2>&1 | tail -5"

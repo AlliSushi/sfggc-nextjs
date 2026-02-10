@@ -145,7 +145,11 @@ PM2_PATH=$(which pm2)
 
 ### 7. Nginx Configuration (CloudPanel)
 
-The site uses a **hybrid nginx config**: static files for the public site and a reverse proxy for the portal. In CloudPanel, add these location blocks to the nginx vhost for `www.goldengateclassic.org`:
+The site uses a **hybrid nginx config**: static files for the public site and a reverse proxy for the portal.
+
+#### If You Have Direct Nginx Access
+
+In CloudPanel, add these location blocks to the nginx vhost for `www.goldengateclassic.org`:
 
 ```nginx
 # Static public site (existing — keep this)
@@ -194,6 +198,25 @@ After saving in CloudPanel, test and reload:
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+#### If You Do NOT Have Direct Nginx Access (ISP-Controlled)
+
+If you cannot run `nginx -t` or `systemctl reload nginx` directly, use the copy/paste workflow:
+
+**Configuration File:** `backend/config/vhost.txt`
+
+This file contains the complete nginx vhost configuration, including the portal proxy settings (lines 34-68).
+
+**Workflow:**
+1. **Edit locally:** `nano backend/config/vhost.txt`
+2. **Copy to clipboard:** `cat backend/config/vhost.txt | pbcopy` (macOS)
+3. **Paste in ISP control panel:** Log into web portal → Nginx/Vhost config → Paste → Save
+4. **Test:** `curl -I https://www.goldengateclassic.org/portal`
+5. **Commit:** `git add backend/config/vhost.txt && git commit -m "Update nginx config"`
+
+The ISP control panel will automatically validate syntax and reload nginx when you save.
+
+For detailed instructions, see: `DEPLOYMENT.md#nginx-configuration-management`
 
 ### 8. Import Data
 
