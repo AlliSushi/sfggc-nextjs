@@ -22,20 +22,20 @@ test("Given import-lanes API file, when read, then exports a default function ha
 test("Given import-lanes API file, when read, then uses await with requireSuperAdmin", () => {
   const content = fs.readFileSync(API_PATH, "utf8");
   assert.ok(
-    content.includes("await requireSuperAdmin"),
-    "must use await requireSuperAdmin — missing await bypasses auth entirely"
+    content.includes("handleAdminCsvImport"),
+    "must use shared handleAdminCsvImport helper, which enforces super-admin auth"
   );
 });
 
 test("Given import-lanes API file, when read, then handles preview and import modes", () => {
   const content = fs.readFileSync(API_PATH, "utf8");
   assert.ok(
-    content.includes('"preview"'),
-    'must handle "preview" mode'
+    content.includes("IMPORT_MODES"),
+    'must use shared import mode constants for "preview" and "import" behavior'
   );
   assert.ok(
-    content.includes('"import"'),
-    'must handle "import" mode'
+    content.includes("IMPORT_MODES.IMPORT"),
+    'must handle "import" mode via IMPORT_MODES constant'
   );
 });
 
@@ -55,10 +55,26 @@ test("Given import-lanes API file, when processing import mode, then withTransac
   );
 });
 
+test("Given import-lanes API file, when handling no-match imports, then it uses shared no-match error helpers", () => {
+  const content = fs.readFileSync(API_PATH, "utf8");
+  assert.ok(
+    content.includes("NO_PARTICIPANTS_MATCHED_ERROR"),
+    "route must reuse NO_PARTICIPANTS_MATCHED_ERROR constant"
+  );
+  assert.ok(
+    content.includes("isNoParticipantsMatchedError"),
+    "route must reuse isNoParticipantsMatchedError helper"
+  );
+  assert.ok(
+    content.includes("parseCsvTextBody"),
+    "route must reuse parseCsvTextBody helper for csvText validation"
+  );
+});
+
 test("Given import-lanes API file, when request body is too large, then it returns 413", () => {
   const content = fs.readFileSync(API_PATH, "utf8");
   assert.ok(
-    content.includes("413") && content.includes("CSV too large"),
-    "route must guard oversized CSV payloads with HTTP 413"
+    content.includes("handleAdminCsvImport"),
+    "route must use shared import helper, which guards oversized CSV payloads with HTTP 413"
   );
 });

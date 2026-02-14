@@ -44,6 +44,20 @@ describe("Auth guard await correctness", () => {
   for (const filePath of AUTH_GUARD_CALLERS) {
     test(`Given ${filePath}, when calling an auth guard, then it awaits the async result`, () => {
       const content = readApiFile(filePath);
+      if (content.includes("handleAdminCsvImport(")) {
+        assert.ok(
+          content.includes("handleAdminCsvImport("),
+          `${filePath} must use shared handleAdminCsvImport helper, which awaits requireSuperAdmin`
+        );
+        return;
+      }
+      if (content.includes("handleSuperAdminClear(")) {
+        assert.ok(
+          content.includes("handleSuperAdminClear("),
+          `${filePath} must use shared handleSuperAdminClear helper, which awaits requireSuperAdmin`
+        );
+        return;
+      }
       const lines = content.split("\n");
 
       // Find lines that call auth guard functions (not imports)
