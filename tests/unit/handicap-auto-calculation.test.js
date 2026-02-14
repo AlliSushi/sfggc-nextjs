@@ -2,6 +2,7 @@ const { test, describe } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
+const { pathToFileURL } = require("node:url");
 
 const PARTICIPANT_EDIT_FORM = path.join(
   process.cwd(),
@@ -15,6 +16,11 @@ const PARTICIPANT_DB = path.join(
   process.cwd(),
   "src/utils/portal/participant-db.js"
 );
+const HANDICAP_CONSTANTS = path.join(
+  process.cwd(),
+  "src/utils/portal/handicap-constants.js"
+);
+const loadHandicapConstants = async () => import(pathToFileURL(HANDICAP_CONSTANTS));
 
 describe("Handicap auto-calculation during edit", () => {
   test("Given participant edit form, when rendering fields, then handicap field does NOT exist", () => {
@@ -93,16 +99,14 @@ describe("Handicap auto-calculation during edit", () => {
     );
   });
 
-  test("Given handicap auto-calculation, when book average is 190, then handicap is 31", () => {
-    // Test the math: (225 - 190) * 0.9 = 35 * 0.9 = 31.5 -> floor = 31
-    const bookAverage = 190;
-    const expectedHandicap = Math.floor((225 - bookAverage) * 0.9);
+  test("Given handicap auto-calculation, when book average is 190, then handicap is 31", async () => {
+    const { calculateHandicap } = await loadHandicapConstants();
+    assert.strictEqual(calculateHandicap(190), 31);
+  });
 
-    assert.strictEqual(
-      expectedHandicap,
-      31,
-      "Handicap calculation must be correct: (225 - 190) * 0.9 = 31.5 -> floor = 31"
-    );
+  test("Given handicap auto-calculation, when book average exceeds 225, then handicap is capped at 0", async () => {
+    const { calculateHandicap } = await loadHandicapConstants();
+    assert.strictEqual(calculateHandicap(230), 0);
   });
 
   test("Given handicap auto-calculation, when book average is null, then handicap is null", () => {

@@ -21,5 +21,8 @@ export const HANDICAP_MULTIPLIER = 0.9;
  */
 export const calculateHandicap = (bookAverage) => {
   if (bookAverage === null || bookAverage === undefined) return null;
-  return Math.floor((HANDICAP_BASE_SCORE - bookAverage) * HANDICAP_MULTIPLIER);
+  return Math.max(
+    0,
+    Math.floor((HANDICAP_BASE_SCORE - bookAverage) * HANDICAP_MULTIPLIER)
+  );
 };

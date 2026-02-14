@@ -2,6 +2,7 @@ const { test, describe } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
+const { pathToFileURL } = require("node:url");
 
 const IMPORT_SCRIPT = path.join(
   process.cwd(),
@@ -19,6 +20,7 @@ const HANDICAP_CONSTANTS = path.join(
   process.cwd(),
   "src/utils/portal/handicap-constants.js"
 );
+const loadHandicapConstants = async () => import(pathToFileURL(HANDICAP_CONSTANTS));
 
 describe("Handicap calculation and display", () => {
   test("Given handicap-constants module, when examining formula, then it uses USBC standard: floor((225 - book_average) * 0.9)", () => {
@@ -97,28 +99,19 @@ describe("Handicap calculation and display", () => {
     );
   });
 
-  test("Given handicap calculation, when book average is 180, then handicap is 40", () => {
-    // Test the math: (225 - 180) * 0.9 = 45 * 0.9 = 40.5 -> floor = 40
-    const bookAverage = 180;
-    const expectedHandicap = Math.floor((225 - bookAverage) * 0.9);
-
-    assert.strictEqual(
-      expectedHandicap,
-      40,
-      "Handicap calculation must be correct: (225 - 180) * 0.9 = 40.5 -> floor = 40"
-    );
+  test("Given handicap calculation, when book average is 180, then handicap is 40", async () => {
+    const { calculateHandicap } = await loadHandicapConstants();
+    assert.strictEqual(calculateHandicap(180), 40);
   });
 
-  test("Given handicap calculation, when book average is 200, then handicap is 22", () => {
-    // Test the math: (225 - 200) * 0.9 = 25 * 0.9 = 22.5 -> floor = 22
-    const bookAverage = 200;
-    const expectedHandicap = Math.floor((225 - bookAverage) * 0.9);
+  test("Given handicap calculation, when book average is 200, then handicap is 22", async () => {
+    const { calculateHandicap } = await loadHandicapConstants();
+    assert.strictEqual(calculateHandicap(200), 22);
+  });
 
-    assert.strictEqual(
-      expectedHandicap,
-      22,
-      "Handicap calculation must be correct: (225 - 200) * 0.9 = 22.5 -> floor = 22"
-    );
+  test("Given handicap calculation, when book average exceeds 225, then handicap is capped at 0", async () => {
+    const { calculateHandicap } = await loadHandicapConstants();
+    assert.strictEqual(calculateHandicap(230), 0);
   });
 
   test("Given handicap calculation, when book average is null, then handicap is null", () => {
