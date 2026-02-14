@@ -217,6 +217,8 @@ on duplicate key update
 
 The CSV lane import (`importLanesCsv.js`) applies the same principle using the `wouldClobberExisting(newValue, oldValue)` predicate: empty CSV cells do not overwrite existing lane values.
 
+The CSV score import (`importScoresCsv.js`) uses both approaches: `wouldClobberExisting` at the application level to skip unchanged rows, and `COALESCE(VALUES(col), col)` in the SQL for `game1`, `game2`, `game3`. The score import never touches `lane`, `entering_avg`, or `handicap` columns.
+
 ### XML Import: Handling Attributes
 
 IGBO XML includes attributes on the `BOOK_AVERAGE` element:
@@ -269,6 +271,74 @@ Lane changes are tracked in `audit_logs` with these field names:
 - **Import logic**: `src/utils/portal/importLanesCsv.js`
 - **Display builder**: `src/utils/portal/lane-assignments.js` (groups adjacent lanes into odd-lane pairs for display)
 - **API routes**: `src/pages/api/portal/admin/import-lanes.js`, `src/pages/api/portal/admin/lane-assignments.js`
+
+## Scores Table: Score CSV Import
+
+### Overview
+
+The score CSV import writes game scores (`game1`, `game2`, `game3`) into the `scores` table for a specific event type. Unlike the XML and lane imports, the scoring software CSV identifies bowlers by name rather than PID, requiring a name-matching step before any database writes.
+
+### Name-Based Matching
+
+Because the bowling center's scoring software does not track PIDs, the import matches bowlers by comparing the CSV `Bowler name` column against `CONCAT(first_name, ' ', last_name)` in the `people` table:
+
+1. **Single match**: Bowler maps directly to a participant
+2. **Multiple matches**: The CSV `Team name` column disambiguates. The comparison uses `startsWith` because the scoring software may truncate long team names
+3. **No match**: Bowler is reported as unmatched and skipped during import
+
+The matching query fetches all people with their team names and existing scores in a single query:
+
+```sql
+SELECT p.pid, p.first_name, p.last_name, t.team_name,
+       s.lane, s.game1, s.game2, s.game3
+FROM people p
+LEFT JOIN teams t ON p.tnmt_id = t.tnmt_id
+LEFT JOIN scores s ON s.pid = p.pid AND s.event_type = ?
+```
+
+### Score Upsert with Null-Preservation
+
+The import uses the same COALESCE pattern as other imports to prevent null values from overwriting existing data:
+
+```sql
+INSERT INTO scores (id, pid, event_type, game1, game2, game3, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, now())
+ON DUPLICATE KEY UPDATE
+  game1 = COALESCE(VALUES(game1), game1),
+  game2 = COALESCE(VALUES(game2), game2),
+  game3 = COALESCE(VALUES(game3), game3),
+  updated_at = now()
+```
+
+**Key characteristics:**
+- Only `game1`, `game2`, `game3` columns are written -- the import never modifies `lane`, `entering_avg`, or `handicap`
+- The unique constraint on `scores(pid, event_type)` enables idempotent upserts
+- Application-level `wouldClobberExisting` check skips rows where the CSV has null but the database has an existing value, avoiding unnecessary SQL round-trips
+- COALESCE in the SQL provides a second layer of null-preservation if a null reaches the database
+
+### Cross-Reference Warnings
+
+During preview mode, the import checks for mismatches between the CSV and existing database values:
+
+- **Team name mismatch**: CSV `Team name` does not match the participant's database team (using `startsWith` for truncation tolerance)
+- **Lane mismatch**: CSV `Lane number` differs from the participant's existing `scores.lane` value
+
+These warnings are informational only and do not block the import.
+
+### Audit Fields
+
+Score changes are tracked in `audit_logs` with per-event, per-game field names:
+
+| Event Type | Game 1 | Game 2 | Game 3 |
+|---|---|---|---|
+| team | `score_team_game1` | `score_team_game2` | `score_team_game3` |
+| doubles | `score_doubles_game1` | `score_doubles_game2` | `score_doubles_game3` |
+| singles | `score_singles_game1` | `score_singles_game2` | `score_singles_game3` |
+
+### Implementation
+
+- **Import logic**: `src/utils/portal/importScoresCsv.js`
+- **API route**: `src/pages/api/portal/admin/import-scores.js`
 
 ## Admins Table: Session Revocation
 

@@ -159,7 +159,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 - Authentication: `POST /api/portal/admin/login`, `POST /api/portal/participant/login`, `GET /api/portal/participant/verify`
 - Data: `GET /api/portal/participants`, `GET /api/portal/participants/[pid]`, `PATCH /api/portal/participants/[pid]`
 - Admin management: `GET/PATCH /api/portal/admins/[id]`, `POST /api/portal/admins/[id]/force-password-change`
-- Admin: `POST /api/portal/admin/import-xml`, `POST /api/portal/admin/import-lanes`, `GET /api/portal/admin/lane-assignments`, `GET /api/portal/admin/possible-issues`, `GET /api/portal/admin/audit`
+- Admin: `POST /api/portal/admin/import-xml`, `POST /api/portal/admin/import-lanes`, `POST /api/portal/admin/import-scores`, `GET /api/portal/admin/lane-assignments`, `GET /api/portal/admin/possible-issues`, `GET /api/portal/admin/audit`
 
 **Note:** Sub-routes use `[id]/index.js` pattern. See `CLAUDE-PATTERNS.md#Next.js API Route Patterns`
 
@@ -186,7 +186,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 **Key Patterns:**
 - **Import-first:** IGBO XML imports populate database via `importIgboXml.js`
 - **Upsert:** Import scripts update existing records or insert new ones (idempotent)
-- **Null-preservation:** Re-imports preserve existing values when the import source lacks data for a field. XML uses `COALESCE(VALUES(col), col)` for `lane`/`game1-3`; CSV uses `wouldClobberExisting()` predicate
+- **Null-preservation:** Re-imports preserve existing values when the import source lacks data for a field. XML uses `COALESCE(VALUES(col), col)` for `lane`/`game1-3`; lane CSV uses `wouldClobberExisting()` predicate; score CSV uses both (app-level filter + SQL COALESCE)
 - **Unique constraints:** `scores(pid, event_type)` ensures one record per participant per event, enables ON DUPLICATE KEY UPDATE
 - **Auto-calculation:** Handicap = floor((225 - bookAverage) * 0.9), calculated automatically, never manually editable
 - **Audit logging:** All admin edits tracked with before/after values
@@ -204,7 +204,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 | **XML attribute parsing** | fast-xml-parser stores attributes as `{'#text': value, '@_attr': attrValue}` | `person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE` |
 | **Database migrations** | Must be idempotent, check existence before applying | Query `information_schema` before ALTER, clean duplicates before adding constraints |
 | **No correlated subqueries** | Use LEFT JOIN for list endpoints, never SELECT subqueries | See `CLAUDE-PATTERNS.md#N+1 Correlated Subqueries -> LEFT JOINs` |
-| **Import null-preservation** | Import upserts must never clobber existing data with nulls | SQL: `COALESCE(VALUES(col), col)`; App: `wouldClobberExisting()`. See `CLAUDE-PATTERNS.md#COALESCE Guard for Import Upserts` |
+| **Import null-preservation** | Import upserts must never clobber existing data with nulls | SQL: `COALESCE(VALUES(col), col)`; App: `wouldClobberExisting()`. Used in XML, lane CSV, and score CSV imports. See `CLAUDE-PATTERNS.md#COALESCE Guard for Import Upserts` |
 | **doubles_pairs JOIN** | Always join on `p.did = dp.did`, never `p.pid = dp.pid` | Joining on `pid` returns stale rows from previous pairings. See `CLAUDE-PATTERNS.md#N+1 Correlated Subqueries -> LEFT JOINs` |
 | **Stale row cleanup** | DELETE orphaned rows before upserting when entities change ownership | `upsertDoublesPair` deletes stale `doubles_pairs` rows before INSERT. See `CLAUDE-PATTERNS.md#Stale Row Cleanup Before Upsert` |
 
@@ -298,6 +298,9 @@ Most components are sections with:
 - `src/pages/api/portal/admin/import-lanes.js` - CSV lane import endpoint (preview + import)
 - `src/pages/api/portal/admin/lane-assignments.js` - Lane assignments display endpoint
 - `src/utils/portal/importLanesCsv.js` - CSV lane import business logic with `wouldClobberExisting` null-preservation guard
+- `src/pages/api/portal/admin/import-scores.js` - CSV score import endpoint (preview + import)
+- `src/utils/portal/importScoresCsv.js` - CSV score import business logic (name-based matching, CSV pivot, COALESCE null-preservation, cross-reference warnings)
+- `src/utils/portal/team-scores.js` - Team/doubles score aggregation utilities (extracted from team API)
 - `src/utils/portal/lane-assignments.js` - Lane assignment display builder (odd-lane pairing)
 - `src/utils/portal/csv.js` - CSV parser
 - `src/utils/portal/event-constants.js` - EVENT_TYPES constants (team, doubles, singles)
@@ -366,6 +369,19 @@ The database connection automatically handles:
 5. Transaction-wrapped upsert to database
 6. Returns import summary with change counts and skipped clobber warnings
 
+### Score Import Flow
+
+1. Admin selects event type (team/doubles/singles) and uploads CSV via admin dashboard
+2. `POST /api/portal/admin/import-scores` receives CSV text (supports preview and import modes)
+3. Parser (`importScoresCsv.js`) validates required columns: Bowler name, Scratch, Game number, Team name, Lane number
+4. `pivotRowsByBowler()` converts per-game CSV rows into per-bowler records (game1/game2/game3)
+5. `matchParticipants()` matches by `CONCAT(first_name, ' ', last_name)` with team name disambiguation for duplicates
+6. Preview returns matched/unmatched/warnings (cross-reference: team/lane mismatches)
+7. Import only touches `game1`, `game2`, `game3` columns -- never `lane`, `entering_avg`, or `handicap`
+8. SQL: `COALESCE(VALUES(game1), game1)` null-preservation. See `CLAUDE-PATTERNS.md#COALESCE Guard for Import Upserts`
+9. Audit fields: `score_{eventType}_game1`, `score_{eventType}_game2`, `score_{eventType}_game3`
+10. Transaction-wrapped with `logAdminAction` for `import_scores` action
+
 ### Authentication Flow
 
 **Participant Login:**
@@ -404,7 +420,7 @@ BDD workflow methodology is defined in the user-level `~/.claude/CLAUDE.md`. Thi
 
 **Test Types:**
 - **Static source analysis** -- read file contents, assert structural properties (imports, exports, naming, guard clauses). See `tests/unit/no-server-imports-frontend.test.js`, `tests/unit/refactoring-dry.test.js`.
-- **Behavioral tests** -- exercise functions/modules with inputs, assert outputs. See `backend/tests/api/audit.test.js`, `tests/unit/import-xml-no-clobber.test.js`, `tests/unit/import-lanes-csv.test.js`, `tests/unit/doubles-pair-update.test.js`.
+- **Behavioral tests** -- exercise functions/modules with inputs, assert outputs. See `backend/tests/api/audit.test.js`, `tests/unit/import-xml-no-clobber.test.js`, `tests/unit/import-lanes-csv.test.js`, `tests/unit/import-scores-csv.test.js`, `tests/unit/team-score-aggregation.test.js`, `tests/unit/doubles-pair-update.test.js`.
 - **Route existence tests** -- verify expected files exist on disk. See `tests/frontend/portal-routes.test.js`.
 
 **See `CLAUDE-PATTERNS.md#BDD Test Patterns` for test implementation patterns.**

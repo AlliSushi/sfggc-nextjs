@@ -554,6 +554,7 @@ ON DUPLICATE KEY UPDATE
 **Files:**
 - `importIgboXml.js` — SQL COALESCE on `lane`, `game1`, `game2`, `game3`
 - `importLanesCsv.js` — `wouldClobberExisting()` predicate in `computeLaneChanges`
+- `importScoresCsv.js` — Both: app-level `wouldClobberExisting()` filter + SQL `COALESCE(VALUES(game1), game1)` on `game1`, `game2`, `game3`
 
 ### Stale Row Cleanup Before Upsert
 
@@ -579,6 +580,92 @@ await query(
 **Files:**
 - Implementation: `src/utils/portal/participant-db.js` -- `upsertDoublesPair()`
 - Test: `tests/unit/doubles-pair-update.test.js`
+
+### Name-Based CSV Matching with Team Disambiguation
+
+**Problem:** Score CSV files identify bowlers by display name (no PID). Multiple bowlers may share the same name across different teams.
+
+**Pattern:** Build a lowercase name index from `CONCAT(first_name, ' ', last_name)`. Single match resolves immediately. Multiple matches disambiguate using CSV team name vs DB team name (prefix comparison handles scoring software truncation).
+
+```javascript
+// Build lookup: lowercase full name → list of DB people
+const nameIndex = new Map();
+for (const person of dbPeople) {
+  const fullName = `${person.first_name} ${person.last_name}`.toLowerCase().trim();
+  const list = nameIndex.get(fullName) || [];
+  list.push(person);
+  nameIndex.set(fullName, list);
+}
+
+// Match: single hit → use it; multiple hits → filter by team name
+if (candidates.length === 1) {
+  person = candidates[0];
+} else {
+  const teamMatches = candidates.filter(c =>
+    teamNamesMatch(bowler.csvTeamName, c.team_name)
+  );
+  if (teamMatches.length === 1) person = teamMatches[0];
+  else { unmatched.push(...); continue; }
+}
+```
+
+**Team name comparison:** `startsWith` in both directions to handle scoring software truncating long team names.
+
+**Files:** `src/utils/portal/importScoresCsv.js` -- `matchParticipants()`, `teamNamesMatch()`
+**Test:** `tests/unit/import-scores-csv.test.js`
+
+### CSV Pivot: Multiple Rows Per Entity to Single Record
+
+**Problem:** Bowling scoring software exports one row per game per bowler (3 rows per person). The database stores one record per person per event type with `game1`, `game2`, `game3` columns.
+
+**Pattern:** Group rows by lowercase bowler name, assign scores by game number.
+
+```javascript
+const pivotRowsByBowler = (rows) => {
+  const bowlers = new Map();
+  for (const row of rows) {
+    const key = row["Bowler name"].trim().toLowerCase();
+    if (!bowlers.has(key)) {
+      bowlers.set(key, { name: row["Bowler name"].trim(), game1: null, game2: null, game3: null });
+    }
+    const gameNum = parseInt(row["Game number"], 10);
+    const score = normalizeScoreValue(row["Scratch"]);
+    if (gameNum === 1) bowlers.get(key).game1 = score;
+    else if (gameNum === 2) bowlers.get(key).game2 = score;
+    else if (gameNum === 3) bowlers.get(key).game3 = score;
+  }
+  return bowlers;
+};
+```
+
+**Rule:** Import only touches `game1`, `game2`, `game3` -- never `lane`, `entering_avg`, or `handicap`. Those are managed by lane import and XML import respectively.
+
+**Files:** `src/utils/portal/importScoresCsv.js` -- `pivotRowsByBowler()`
+**Test:** `tests/unit/import-scores-csv.test.js`
+
+### Score Aggregation Extraction
+
+**Problem:** Team/doubles score totals were computed inline in the team API endpoint. The logic was buggy (picked one member instead of summing all) and non-reusable.
+
+**Pattern:** Extract aggregation into pure utility functions. Team scores sum all members per game; doubles scores sum both partners per game.
+
+```javascript
+// Team: sum all members' per-game scores
+const sumGame = (field) => {
+  const values = members.map(m => m[field]).filter(v => v != null);
+  return values.length > 0 ? values.reduce((a, b) => a + b, 0) : null;
+};
+return filterNonNull([sumGame("team_game1"), sumGame("team_game2"), sumGame("team_game3")]);
+
+// Doubles: sum both partners' per-game scores
+const v1 = member1?.[field];
+const v2 = member2?.[field];
+return (v1 || 0) + (v2 || 0);
+```
+
+**Files:** `src/utils/portal/team-scores.js` -- `extractTeamScores()`, `extractTeamLane()`, `extractDoublesPairScores()`
+**Consumer:** `src/pages/api/portal/teams/[teamSlug].js`
+**Test:** `tests/unit/team-score-aggregation.test.js`
 
 ### Sequential SSR Fetch Consolidation
 

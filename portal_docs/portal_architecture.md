@@ -148,6 +148,7 @@ Acceptance criteria (BDD-style):
 - `POST /api/portal/admin/import-lanes`
 - `GET /api/portal/admin/lane-assignments`
 - `GET /api/portal/admin/possible-issues`
+- `POST /api/portal/admin/import-scores`
 - `GET /api/portal/teams/:teamSlug`
 
 ## Proposed API Contracts (initial)
@@ -324,6 +325,68 @@ Response:
 }
 ```
 
+`POST /api/portal/admin/import-scores`
+
+**Authorization**: Super admin only (verified via `requireSuperAdmin` guard)
+
+Request:
+```json
+{
+  "csvText": "string (raw CSV content)",
+  "mode": "preview | import",
+  "eventType": "team | doubles | singles"
+}
+```
+
+Response (preview mode):
+```json
+{
+  "ok": true,
+  "matched": [
+    {
+      "pid": "string",
+      "firstName": "string",
+      "lastName": "string",
+      "dbTeamName": "string",
+      "csvTeamName": "string",
+      "game1": "number|null",
+      "game2": "number|null",
+      "game3": "number|null",
+      "existingGame1": "number|null",
+      "existingGame2": "number|null",
+      "existingGame3": "number|null"
+    }
+  ],
+  "unmatched": [
+    {
+      "name": "string",
+      "csvTeamName": "string",
+      "reason": "string"
+    }
+  ],
+  "warnings": [
+    {
+      "pid": "string",
+      "name": "string",
+      "type": "team_mismatch | lane_mismatch",
+      "expected": "string",
+      "actual": "string"
+    }
+  ]
+}
+```
+
+Response (import mode):
+```json
+{
+  "ok": true,
+  "summary": {
+    "updated": "number",
+    "skipped": "number"
+  }
+}
+```
+
 `POST /api/portal/admins/:id/force-password-change`
 
 **Authorization**: Super admin only (verified via `requireSuperAdmin` guard)
@@ -488,6 +551,7 @@ See [portal_database_architecture.md](portal_database_architecture.md#scores-tab
 - CSV seed script for local/staging data.
 - XML import via admin dashboard and `/api/portal/admin/import-xml`.
 - CSV lane import via admin dashboard and `/api/portal/admin/import-lanes`.
+- CSV score import via admin dashboard and `/api/portal/admin/import-scores`.
 
 ### Null-Preservation on Re-Import
 
@@ -496,6 +560,8 @@ Both XML and CSV imports preserve existing database values when the import file 
 **XML Import** (`importIgboXml.js`): The scores upsert uses `COALESCE(VALUES(col), col)` for `lane`, `game1`, `game2`, and `game3` fields. If the XML does not include a value for these columns, the existing database value is retained. The `entering_avg` and `handicap` fields overwrite unconditionally because IGBO XML always provides a book average.
 
 **CSV Lane Import** (`importLanesCsv.js`): Empty CSV cells do not overwrite existing lane values. The `wouldClobberExisting(newValue, oldValue)` predicate detects when an import would replace an existing database value with null, and skips that change. Only non-null CSV values that differ from the current database value trigger updates.
+
+**CSV Score Import** (`importScoresCsv.js`): Uses the same `wouldClobberExisting` predicate at the per-game level. If a CSV row has no score for a game but the database already has one, that game's value is preserved. The SQL upsert also uses `COALESCE(VALUES(col), col)` for `game1`, `game2`, `game3` as a second layer of defense. The import never touches `lane`, `entering_avg`, or `handicap` columns.
 
 ## Lane Assignments
 
@@ -542,6 +608,62 @@ Lane values are normalized: empty strings and `#N/A` are treated as null.
 - `tests/unit/lane-assignments.test.js`
 - `tests/unit/event-constants.test.js`
 - `tests/integration/lane-assignments-api.test.js`
+
+## Score Import
+
+### Overview
+
+Admins can upload bowling scores exported from the bowling center's scoring software. The CSV is imported per event type (team, doubles, or singles). Bowlers are matched by name rather than PID because the scoring software does not track PIDs.
+
+### CSV Format
+
+The bowling scoring software exports one row per game per bowler. Required columns: `Bowler name`, `Scratch`, `Game number`, `Team name`, `Lane number`.
+
+The import logic pivots multiple rows per bowler (one per game) into a single record with `game1`, `game2`, `game3`.
+
+### Import Flow
+
+1. Admin opens "Import Scores" from the admin menu dropdown
+2. Selects event type (team, doubles, or singles)
+3. Uploads CSV file from bowling scoring software
+4. `POST /api/portal/admin/import-scores` with `{ csvText, mode: "preview", eventType }`
+5. **Pivot**: Multiple CSV rows per bowler are combined into one record with `game1`/`game2`/`game3`
+6. **Name matching**: Bowlers are matched by full name (`first_name + last_name`) against `people` table
+7. **Disambiguation**: When multiple database records match a name, the CSV `Team name` column narrows to a single match (uses `startsWith` to handle scoring software name truncation)
+8. **Cross-reference warnings**: Team name mismatches and lane mismatches between CSV and database are flagged as non-blocking warnings (preview only)
+9. Admin reviews matched/unmatched/warnings tables and confirms import
+10. `POST /api/portal/admin/import-scores` with `{ csvText, mode: "import", eventType }`
+11. Transaction-wrapped upsert writes scores to `scores` table using `INSERT ... ON DUPLICATE KEY UPDATE` with COALESCE null-preservation
+12. Only `game1`, `game2`, `game3` columns are written -- `lane`, `entering_avg`, and `handicap` are never modified by score import
+13. Audit log records each score change per participant per game (`score_team_game1`, `score_doubles_game2`, etc.)
+
+### Files
+
+**Backend:**
+- `src/pages/api/portal/admin/import-scores.js` -- CSV score import API (preview + import)
+- `src/utils/portal/importScoresCsv.js` -- CSV score import business logic (pivot, name matching, disambiguation, COALESCE upsert)
+- `src/utils/portal/csv.js` -- CSV parser (shared with lane import)
+- `src/utils/portal/event-constants.js` -- EVENT_TYPES constants (shared)
+
+**Frontend:**
+- `src/components/Portal/ImportScoresModal/ImportScoresModal.js` -- 3-step modal (select event type, preview, confirm)
+
+## Team Score Aggregation
+
+### Overview
+
+Team and doubles pair scores are aggregated by summing individual members' game scores. The team profile page displays both team-level totals and per-doubles-pair totals.
+
+### Aggregation Functions
+
+- `extractTeamScores(members)` -- Sums all team members' per-game scores (e.g., team Game 1 = sum of all 4 members' `team_game1`)
+- `extractTeamLane(members)` -- Returns the first member's team lane
+- `extractDoublesPairScores(member1, member2)` -- Sums both partners' per-game doubles scores
+
+### Files
+
+**Backend:**
+- `src/utils/portal/team-scores.js` -- Team and doubles pair score aggregation functions
 
 ## Possible Issues (Data Quality Monitor)
 
