@@ -37,4 +37,6 @@ test("Given the portal MVP, when checking routes, then key pages exist", () => {
   ensureFileExists("src/pages/api/portal/admin/reset-password.js");
   ensureFileExists("src/pages/portal/admin/reset-password.js");
   ensureFileExists("src/pages/api/portal/admin/import-lanes.js");
+  ensureFileExists("src/pages/portal/scores.js");
+  ensureFileExists("src/pages/api/portal/scores.js");
 });

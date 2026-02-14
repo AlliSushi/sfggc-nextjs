@@ -178,16 +178,35 @@ test(
 );
 
 test(
-  "Given team API module, when checking source, then it imports filterNonNull from array-helpers instead of defining it locally",
+  "Given team API module, when checking source, then it imports score extraction from team-scores instead of defining it locally",
   () => {
     const content = readFile("src/pages/api/portal/teams/[teamSlug].js");
     assert.ok(
-      content.includes('from "../../../../utils/portal/array-helpers.js"'),
-      "Team API must import filterNonNull from array-helpers"
+      content.includes('from "../../../../utils/portal/team-scores.js"'),
+      "Team API must import from team-scores"
+    );
+    assert.ok(
+      content.includes("extractTeamScores"),
+      "Team API must use extractTeamScores from team-scores"
     );
     assert.ok(
       !content.match(/const filterNonNull\s*=/),
       "Team API must not define its own filterNonNull — use the shared utility"
+    );
+  }
+);
+
+test(
+  "Given team-scores module, when checking source, then it imports filterNonNull from array-helpers instead of defining it locally",
+  () => {
+    const content = readFile("src/utils/portal/team-scores.js");
+    assert.ok(
+      content.includes('from "./array-helpers.js"'),
+      "team-scores must import from array-helpers"
+    );
+    assert.ok(
+      !content.match(/const filterNonNull\s*=/),
+      "team-scores must not define its own filterNonNull — use the shared utility"
     );
   }
 );
@@ -231,5 +250,85 @@ test(
         `${filePath} must not compute host/protocol inline — use buildBaseUrl from ssr-helpers`
       );
     });
+  }
+);
+
+// ---------------------------------------------------------------------------
+// EM_DASH shared constant extraction
+// ---------------------------------------------------------------------------
+
+test(
+  "Given display-constants module, when checking source, then it exports EM_DASH",
+  () => {
+    const content = readFile("src/utils/portal/display-constants.js");
+    assert.ok(
+      content.includes("EM_DASH"),
+      "display-constants must define EM_DASH"
+    );
+    assert.ok(
+      content.includes("export { EM_DASH }"),
+      "display-constants must export EM_DASH"
+    );
+  }
+);
+
+test(
+  "Given navigation module, when checking source, then it imports EM_DASH from display-constants",
+  () => {
+    const content = readFile("src/utils/portal/navigation.js");
+    assert.ok(
+      content.includes('from "./display-constants.js"'),
+      "navigation must import EM_DASH from display-constants"
+    );
+  }
+);
+
+test(
+  "Given admin clear route helper, when checking source, then it centralizes super-admin clear endpoint boilerplate",
+  () => {
+    const content = readFile("src/utils/portal/admin-clear-route.js");
+    assert.ok(
+      content.includes("handleSuperAdminClear"),
+      "admin-clear-route must define handleSuperAdminClear"
+    );
+    assert.ok(
+      content.includes("requireSuperAdmin"),
+      "admin-clear-route must enforce super-admin authorization"
+    );
+    assert.ok(
+      content.includes("withTransaction"),
+      "admin-clear-route must wrap clear operations in a transaction"
+    );
+  }
+);
+
+test(
+  "Given audit and scores clear routes, when checking source, then both use shared handleSuperAdminClear helper",
+  () => {
+    const auditClear = readFile("src/pages/api/portal/admin/audit/clear.js");
+    const scoresClear = readFile("src/pages/api/portal/admin/scores/clear.js");
+    assert.ok(
+      auditClear.includes("handleSuperAdminClear"),
+      "audit clear route must use handleSuperAdminClear"
+    );
+    assert.ok(
+      scoresClear.includes("handleSuperAdminClear"),
+      "scores clear route must use handleSuperAdminClear"
+    );
+  }
+);
+
+test(
+  "Given participant audit API route, when checking source, then it uses a named PARTICIPANT_AUDIT_LIMIT constant",
+  () => {
+    const content = readFile("src/pages/api/portal/participants/[pid]/audit.js");
+    assert.ok(
+      content.includes("PARTICIPANT_AUDIT_LIMIT"),
+      "participant audit route must define PARTICIPANT_AUDIT_LIMIT constant"
+    );
+    assert.ok(
+      content.includes("limit ?"),
+      "participant audit query must parameterize limit using PARTICIPANT_AUDIT_LIMIT"
+    );
   }
 );

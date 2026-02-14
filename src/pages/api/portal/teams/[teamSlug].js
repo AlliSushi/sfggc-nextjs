@@ -2,9 +2,9 @@ import { query } from "../../../../utils/portal/db.js";
 import { toTeamSlug } from "../../../../utils/portal/slug.js";
 import { getAuthSessions } from "../../../../utils/portal/auth-guards.js";
 import { forbidden, methodNotAllowed, unauthorized } from "../../../../utils/portal/http.js";
-import { filterNonNull } from "../../../../utils/portal/array-helpers.js";
 import { buildDisplayName } from "../../../../utils/portal/name-helpers.js";
 import { EVENT_TYPES } from "../../../../utils/portal/event-constants.js";
+import { extractTeamScores, extractTeamLane, extractDoublesPairScores } from "../../../../utils/portal/team-scores.js";
 
 
 const sortByTeamOrder = (a, b) => {
@@ -170,13 +170,17 @@ const fetchTeamMembers = async (tnmtId) => {
         s.lane as team_lane,
         s.game1 as team_game1,
         s.game2 as team_game2,
-        s.game3 as team_game3
+        s.game3 as team_game3,
+        ds.game1 as doubles_game1,
+        ds.game2 as doubles_game2,
+        ds.game3 as doubles_game3
       from people p
       left join doubles_pairs d on d.did = p.did
       left join scores s on s.pid = p.pid and s.event_type = ?
+      left join scores ds on ds.pid = p.pid and ds.event_type = ?
       where p.tnmt_id = ?
       `,
-    [EVENT_TYPES.TEAM, tnmtId]
+    [EVENT_TYPES.TEAM, EVENT_TYPES.DOUBLES, tnmtId]
   );
   return members;
 };
@@ -191,19 +195,6 @@ const resolveTeamLocation = (members) => {
   );
 };
 
-const extractTeamScores = (members) => {
-  const scoreSource = members.find(
-    (m) => m.team_game1 != null || m.team_game2 != null || m.team_game3 != null
-  );
-  return scoreSource
-    ? filterNonNull([scoreSource.team_game1, scoreSource.team_game2, scoreSource.team_game3])
-    : [];
-};
-
-const extractTeamLane = (members) => {
-  const laneSource = members.find((member) => member.team_lane);
-  return laneSource?.team_lane || "";
-};
 
 const buildRosterResponse = (members) => {
   return members.map((member) => ({
@@ -213,6 +204,7 @@ const buildRosterResponse = (members) => {
     teamOrder: member.team_order,
     doublesPartnerPid: member.partner?.pid || "",
     doublesPartnerName: member.partner ? buildDisplayName(member.partner) : "",
+    doublesPairScores: extractDoublesPairScores(member, member.partner || null),
   }));
 };
 

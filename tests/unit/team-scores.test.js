@@ -175,12 +175,16 @@ test(
 );
 
 test(
-  "Given team API, when no members have scores, then teamScores is an empty array",
+  "Given team-scores module, when no members have scores, then extractTeamScores returns an empty array",
   () => {
-    const content = readFile("src/pages/api/portal/teams/[teamSlug].js");
+    const content = readFile("src/utils/portal/team-scores.js");
     assert.ok(
-      content.includes("? filterNonNull(") && content.includes(": []"),
-      "Team API must fall back to an empty array when no member has team scores"
+      content.includes("return []"),
+      "extractTeamScores must return an empty array when no member has scores"
+    );
+    assert.ok(
+      content.includes("filterNonNull("),
+      "extractTeamScores must use filterNonNull for score aggregation"
     );
   }
 );

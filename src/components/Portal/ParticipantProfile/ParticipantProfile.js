@@ -2,12 +2,14 @@ import Link from "next/link";
 import ScoreCard from "../ScoreCard/ScoreCard";
 import styles from "./ParticipantProfile.module.scss";
 import { toTeamSlug } from "../../../utils/portal/slug.js";
+import { appendFromParam } from "../../../utils/portal/navigation.js";
 
 const ParticipantProfile = ({
   participant,
   preview = false,
   isAdmin = false,
   partnerLinkBase = null,
+  returnTo = "",
 }) => {
   const showAdminDetails = isAdmin || preview;
   const teamName = participant?.team?.name || "";
@@ -144,6 +146,15 @@ const ParticipantProfile = ({
           <div className="col-12">
             <ScoreCard label="Singles scores" scores={participant.scores?.singles} />
           </div>
+        </div>
+
+        <div className="mt-3 text-center">
+          <Link
+            href={appendFromParam("/portal/scores", returnTo)}
+            className="btn btn-outline-primary"
+          >
+            View Standings
+          </Link>
         </div>
       </div>
     </section>

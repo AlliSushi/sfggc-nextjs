@@ -291,7 +291,7 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
 
         {error && <div className="alert alert-danger">{error}</div>}
 
-        {!isEditing && <ParticipantProfile participant={participant} isAdmin={isAdmin} />}
+        {!isEditing && <ParticipantProfile participant={participant} isAdmin={isAdmin} returnTo={router.asPath} />}
 
         {isAdmin && isEditing && (
           <ParticipantEditForm
