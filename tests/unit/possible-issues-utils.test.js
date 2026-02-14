@@ -231,6 +231,32 @@ describe("possible issues NULL partner_pid exclusion", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Empty doubles_pairs rows (partner_pid IS NULL) should not exclude from orphan detection
+// ---------------------------------------------------------------------------
+
+describe("possible issues orphan detection with empty doubles_pairs rows", () => {
+  it("Given fetchNoTeamNoLaneNoPartner SQL, when checking for doubles partner, then it requires non-null partner_pid not just row existence", () => {
+    const fnMatch = possibleIssuesSrc.match(
+      /const fetchNoTeamNoLaneNoPartner[\s\S]*?return rows;\s*\};/
+    )?.[0] || "";
+
+    assert.ok(
+      fnMatch.length > 0,
+      "fetchNoTeamNoLaneNoPartner function must exist"
+    );
+
+    // The query must check for a meaningful doubles pairing (partner_pid IS NOT NULL),
+    // not just whether a doubles_pairs row exists. A row with partner_pid = NULL
+    // means the partner was cleared — the participant is effectively without a partner.
+    const sqlLower = fnMatch.toLowerCase();
+    assert.ok(
+      sqlLower.includes("partner_pid is not null"),
+      "fetchNoTeamNoLaneNoPartner must check for non-null partner_pid, not just doubles_pairs row existence"
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Stale doubles_pairs rows must not cause false "multiple partners" issues
 // ---------------------------------------------------------------------------
 

@@ -157,7 +157,7 @@ const fetchNoTeamNoLaneNoPartner = async (queryFn) => {
     from people p
     left join admins a on a.pid = p.pid
     left join scores s on s.pid = p.pid and ${NON_EMPTY_LANE_SQL}
-    left join doubles_pairs dp_self on dp_self.pid = p.pid
+    left join doubles_pairs dp_self on dp_self.pid = p.pid and dp_self.partner_pid is not null
     left join doubles_pairs dp_partner on dp_partner.partner_pid = p.pid
     where ${ADMIN_EXCLUSION_SQL}
       and (p.tnmt_id is null or trim(p.tnmt_id) = '')
