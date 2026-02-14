@@ -57,6 +57,7 @@ create table if not exists admins (
   id char(36) primary key default (uuid()),
   email text unique,
   name text,
+  pid varchar(64),
   first_name text,
   last_name text,
   phone text unique,
@@ -218,6 +219,35 @@ const bookAvg = toNumber(person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE);
 ```
 
 This handles both attribute-based and simple text content.
+
+## Scores Table: Lane Assignments
+
+### Overview
+
+The `scores.lane` column stores per-event lane assignments for each participant. Each participant can have up to three lane values (one per event type: team, doubles, singles).
+
+### CSV Import
+
+Lane assignments are imported via CSV upload (`POST /api/portal/admin/import-lanes`):
+
+1. CSV must contain columns: `PID`, `T_Lane`, `D_Lane`, `S_Lane`
+2. Each row is matched against `people.pid` in the database
+3. Lane values are written to `scores.lane` using `INSERT ... ON DUPLICATE KEY UPDATE`
+4. The unique constraint on `scores(pid, event_type)` ensures idempotent updates
+5. Empty strings and `#N/A` values are normalized to NULL
+
+### Audit Fields
+
+Lane changes are tracked in `audit_logs` with these field names:
+- `lane_team` -- team event lane assignment
+- `lane_doubles` -- doubles event lane assignment
+- `lane_singles` -- singles event lane assignment
+
+### Implementation
+
+- **Import logic**: `src/utils/portal/importLanesCsv.js`
+- **Display builder**: `src/utils/portal/lane-assignments.js` (groups adjacent lanes into odd-lane pairs for display)
+- **API routes**: `src/pages/api/portal/admin/import-lanes.js`, `src/pages/api/portal/admin/lane-assignments.js`
 
 ## Admins Table: Session Revocation
 

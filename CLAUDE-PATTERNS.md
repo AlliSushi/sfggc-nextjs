@@ -84,6 +84,29 @@ if (!payload) return;
 - Auth guards: `src/utils/portal/auth-guards.js`
 - Test: `tests/unit/auth-guard-await.test.js`
 
+## mysql2 Return Value Destructuring
+
+**CRITICAL ANTI-PATTERN:** Using object destructuring on `mysql2/promise` query results.
+
+The `mysql2/promise` `pool.query()` returns an **array** `[rows, fields]`, not an object `{ rows }`.
+
+**Wrong (object destructuring -- rows is undefined):**
+```javascript
+const { rows } = await pool.query("SELECT * FROM people");
+// rows is undefined -- object destructuring on an array
+```
+
+**Correct (array destructuring):**
+```javascript
+const [rows] = await pool.query("SELECT * FROM people");
+```
+
+**Note:** The project's `query()` wrapper in `src/utils/portal/db.js` returns `{ rows }`, so this only applies to **direct `pool.query()` calls** -- typically in integration tests that access `db.pool` directly.
+
+**Files:**
+- DB wrapper: `src/utils/portal/db.js` (returns `{ rows }`)
+- Integration tests: `tests/integration/*.test.js` (use `pool.query()` directly)
+
 ## Password Security Patterns
 
 ### Secure Password Generation
@@ -380,6 +403,69 @@ test("Given migration script, when checking logic, then it's idempotent", () => 
 ```
 
 **Files:** `tests/unit/migrations/` directory
+
+### Dev Environment for Database-Dependent Tests
+
+**Rule:** When working on portal features that touch the database (API routes, imports, participant data, scores, audit logs), ensure MariaDB is running before running backend tests.
+
+**Start MariaDB:**
+```bash
+bash scripts/dev/start-mariadb.sh
+```
+
+**Verify it's running:**
+```bash
+pgrep -qf mysqld && echo "MariaDB running" || echo "MariaDB NOT running"
+```
+
+**Test scripts that require a running database:**
+- `bash scripts/test/test-backend.sh` — backend API integration tests
+- `bash scripts/test/test-all.sh` — full suite (includes backend tests)
+
+**Test scripts that do NOT require a database:**
+- `bash scripts/test/test-frontend.sh` — frontend structural/route tests
+- Individual unit tests with mock queries (`node --test tests/unit/*.test.js`)
+
+**Key:** The test scripts do NOT start MariaDB themselves. The agent must ensure it's running before invoking `test-backend.sh` or `test-all.sh`.
+
+### Integration Test Admin Seeding
+
+**Problem:** Auth guards call `checkSessionRevocation()` which queries the `admins` table. Integration tests that use `buildAdminCookie()` / `buildSessionToken()` fail with 401 if no matching admin row exists in the database.
+
+**Root cause:** `checkSessionRevocation` returns `false` (triggering 401) when `rows[0]` is undefined -- i.e., when no admin row with a matching email exists.
+
+**Solution:** Seed an admin row in test setup before making authenticated requests:
+
+```javascript
+const seedDefaultAdmin = async (role = "super-admin") => {
+  await db.pool.query(
+    "INSERT IGNORE INTO admins (id, email, name, role, password_hash) VALUES (?,?,?,?,?)",
+    [crypto.randomUUID(), "admin@example.com", "Admin", role, "not-a-real-hash"]
+  );
+};
+```
+
+**Key:** The email in the seed must match the email used in `buildSessionToken()` / `buildAdminCookie()`.
+
+**Files:** `tests/integration/portal-api.test.js`, `tests/integration/lane-assignments-api.test.js`
+
+### Connection Pool Cleanup in Integration Tests
+
+**Problem:** Node.js process hangs after integration tests because the `db.js` connection pool keeps the event loop alive.
+
+**Solution:** Export `closePool()` from `db.js` and call it in the `after()` hook:
+
+```javascript
+const db = require("../../src/utils/portal/db.js");
+
+after(async () => {
+  await db.closePool();
+});
+```
+
+**Files:**
+- Pool export: `src/utils/portal/db.js`
+- Integration tests: `tests/integration/*.test.js`
 
 ## Audit Logging Patterns
 

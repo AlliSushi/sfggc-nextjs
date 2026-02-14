@@ -151,7 +151,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 
 **Frontend Pages:**
 - `/portal/` - Role chooser (admin or participant)
-- `/portal/admin/` - Admin dashboard, participant search, audit logs
+- `/portal/admin/` - Admin dashboard, participant search, audit logs, lane assignments
 - `/portal/participant/` - Participant login (magic link) and profile view
 - `/portal/team/[teamSlug]` - Team roster and doubles pairings
 
@@ -159,7 +159,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 - Authentication: `POST /api/portal/admin/login`, `POST /api/portal/participant/login`, `GET /api/portal/participant/verify`
 - Data: `GET /api/portal/participants`, `GET /api/portal/participants/[pid]`, `PATCH /api/portal/participants/[pid]`
 - Admin management: `GET/PATCH /api/portal/admins/[id]`, `POST /api/portal/admins/[id]/force-password-change`
-- Admin: `POST /api/portal/admin/import-xml`, `GET /api/portal/admin/audit`
+- Admin: `POST /api/portal/admin/import-xml`, `POST /api/portal/admin/import-lanes`, `GET /api/portal/admin/lane-assignments`, `GET /api/portal/admin/audit`
 
 **Note:** Sub-routes use `[id]/index.js` pattern. See `CLAUDE-PATTERNS.md#Next.js API Route Patterns`
 
@@ -291,6 +291,12 @@ Most components are sections with:
 - `src/pages/api/portal/participants/[pid].js` - Participant CRUD API
 - `src/pages/api/portal/admin/login.js` - Admin authentication
 - `src/pages/api/portal/admin/import-xml.js` - XML import endpoint
+- `src/pages/api/portal/admin/import-lanes.js` - CSV lane import endpoint (preview + import)
+- `src/pages/api/portal/admin/lane-assignments.js` - Lane assignments display endpoint
+- `src/utils/portal/importLanesCsv.js` - CSV lane import business logic
+- `src/utils/portal/lane-assignments.js` - Lane assignment display builder (odd-lane pairing)
+- `src/utils/portal/csv.js` - CSV parser
+- `src/utils/portal/event-constants.js` - EVENT_TYPES constants (team, doubles, singles)
 
 **Database Migrations:**
 - `backend/scripts/migrations/add-scores-unique-constraint.sh` - Adds unique index on scores(pid, event_type)
@@ -393,16 +399,21 @@ BDD workflow methodology is defined in the user-level `~/.claude/CLAUDE.md`. Thi
 |---|---|
 | `tests/unit/` | Unit tests (source analysis + behavioral) |
 | `tests/frontend/` | Frontend route and structure tests |
+| `tests/integration/` | Integration tests (DB-dependent, auto-skip without DB) |
 | `tests/helpers/` | Shared test utilities (`test-db.js`, `api-server.js`) |
 | `backend/tests/api/` | Backend API integration tests |
 | `backend/tests/fixtures/` | Test data (XML fixtures) |
 
 **Commands:**
 ```bash
-bash scripts/test/test-all.sh      # Run all tests
-bash scripts/test/test-frontend.sh # Frontend tests only
+bash scripts/test/test-all.sh      # Run all tests (unit + integration + backend)
+bash scripts/test/test-frontend.sh # Frontend tests only (unit + route tests)
 bash scripts/test/test-backend.sh  # Backend/API tests only
 ```
+
+**Note:** `test-all.sh` runs integration tests (`tests/integration/*.test.js`) as a separate step between frontend and backend tests.
+
+**Database prerequisite:** Backend and full-suite tests require MariaDB to be running. Start it with `bash scripts/dev/start-mariadb.sh` before running `test-backend.sh` or `test-all.sh`. The test scripts do not start the database themselves.
 
 **Database Tests:** Automatically create/drop `<database>_test` databases. On failure, the test database is preserved for debugging.
 

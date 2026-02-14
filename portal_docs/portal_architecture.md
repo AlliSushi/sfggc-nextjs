@@ -145,6 +145,9 @@ Acceptance criteria (BDD-style):
 - `GET /api/portal/admin/audit`
 - `DELETE /api/portal/admin/audit`
 - `POST /api/portal/admins/:id/force-password-change`
+- `POST /api/portal/admin/import-lanes`
+- `GET /api/portal/admin/lane-assignments`
+- `GET /api/portal/teams/:teamSlug`
 
 ## Proposed API Contracts (initial)
 
@@ -483,6 +486,52 @@ See [portal_database_architecture.md](portal_database_architecture.md#scores-tab
 
 - CSV seed script for local/staging data.
 - XML import via admin dashboard and `/api/portal/admin/import-xml`.
+
+## Lane Assignments
+
+### Overview
+
+Admins can upload lane assignment CSV files and view lane-to-team/person mappings for all three bowling events (team, doubles, singles).
+
+### CSV Import Flow
+
+1. Admin uploads CSV file via admin dashboard (`/portal/admin/lane-assignments`)
+2. `POST /api/portal/admin/import-lanes` with `{ csvText, mode }` where mode is `"preview"` or `"import"`
+3. **Preview mode**: Parses CSV, matches PIDs against database, returns `{ matched, unmatched }` for review
+4. **Import mode**: Writes lane values to `scores.lane` column using `INSERT ... ON DUPLICATE KEY UPDATE`
+5. Audit logging tracks each lane change (`lane_team`, `lane_doubles`, `lane_singles` fields)
+
+### CSV Format
+
+Required columns: `PID`, `T_Lane`, `D_Lane`, `S_Lane`
+
+Optional columns (used for display in unmatched rows): `Email`, `FirstName`, `LastName`, `Team_Name`
+
+Lane values are normalized: empty strings and `#N/A` are treated as null.
+
+### Lane Assignment Display
+
+`GET /api/portal/admin/lane-assignments` returns odd-lane-paired data for all three events. Bowlers on adjacent lanes (e.g., 1-2, 3-4) are grouped into rows for display.
+
+### Files
+
+**Backend:**
+- `src/pages/api/portal/admin/import-lanes.js` -- CSV import API (preview + import)
+- `src/pages/api/portal/admin/lane-assignments.js` -- Lane assignments GET endpoint
+- `src/utils/portal/importLanesCsv.js` -- CSV import business logic (validation, matching, import)
+- `src/utils/portal/lane-assignments.js` -- Odd-lane pairing display builder
+- `src/utils/portal/csv.js` -- CSV parser
+- `src/utils/portal/event-constants.js` -- EVENT_TYPES constants (team, doubles, singles)
+
+**Frontend:**
+- `src/pages/portal/admin/lane-assignments.js` -- Admin UI page
+
+**Test Coverage:**
+- `tests/unit/csv-parser.test.js`
+- `tests/unit/import-lanes-csv.test.js`
+- `tests/unit/lane-assignments.test.js`
+- `tests/unit/event-constants.test.js`
+- `tests/integration/lane-assignments-api.test.js`
 
 ## Force Password Change
 
