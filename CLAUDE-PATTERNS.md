@@ -513,7 +513,7 @@ SELECT p.*,
   (SELECT slug FROM teams WHERE tnmt_id = p.tnmt_id) AS team_slug,
   (SELECT CONCAT(first_name, ' ', last_name) FROM people WHERE pid = dp.partner_pid) AS partner_name
 FROM people p
-LEFT JOIN doubles_pairs dp ON p.pid = dp.pid;
+LEFT JOIN doubles_pairs dp ON p.did = dp.did;
 ```
 
 **Correct (single pass with LEFT JOINs):**
@@ -523,13 +523,62 @@ SELECT p.*,
   CONCAT(partner.first_name, ' ', partner.last_name) AS partner_name
 FROM people p
 LEFT JOIN teams t ON p.tnmt_id = t.tnmt_id
-LEFT JOIN doubles_pairs dp ON p.pid = dp.pid
+LEFT JOIN doubles_pairs dp ON p.did = dp.did
 LEFT JOIN people partner ON dp.partner_pid = partner.pid;
 ```
+
+**CRITICAL:** Always JOIN `doubles_pairs` on `p.did = dp.did` (the participant's current doubles ID), never on `p.pid = dp.pid`. Joining on `pid` returns stale rows from previous pairings, causing `LIMIT 1` to pick the wrong partner.
 
 **Rule:** Never use correlated subqueries in SELECT clause for list endpoints. Always use LEFT JOIN.
 
 **File:** `src/utils/portal/participant-db.js` -- `getParticipants()` uses LEFT JOINs.
+
+### COALESCE Guard for Import Upserts
+
+**Problem:** Bulk imports (XML, CSV) send null for fields they don't populate (e.g., XML has no lane data). A plain `col = VALUES(col)` overwrites existing data with null.
+
+**SQL-level solution:** Use `COALESCE(VALUES(col), col)` — use the new value if non-null, otherwise keep the existing value.
+
+```sql
+ON DUPLICATE KEY UPDATE
+  lane = COALESCE(VALUES(lane), lane),       -- preserve if import is null
+  entering_avg = VALUES(entering_avg)         -- always overwrite (import has value)
+```
+
+**Application-level solution:** Filter out null-to-existing changes before generating SQL. Use `wouldClobberExisting(newValue, oldValue)` predicate.
+
+**When to use:** Import paths where the source data is incomplete by design.
+
+**When NOT to use:** Admin edit forms that always send full state (the null is intentional). See `participant-db.js` `upsertScores`.
+
+**Files:**
+- `importIgboXml.js` — SQL COALESCE on `lane`, `game1`, `game2`, `game3`
+- `importLanesCsv.js` — `wouldClobberExisting()` predicate in `computeLaneChanges`
+
+### Stale Row Cleanup Before Upsert
+
+**Problem:** When a participant changes doubles partner, the old `doubles_pairs` row remains. Queries joining on `pid` return multiple rows; `LIMIT 1` picks the oldest (wrong) partner. Stale rows also cause false positives in the Possible Issues dashboard (partner-target-multiple-owners, participant-with-multiple-partners, non-reciprocal-doubles-partners).
+
+**Pattern:** DELETE stale rows before upserting the current pairing.
+
+```javascript
+// In upsertDoublesPair (src/utils/portal/participant-db.js)
+await query(
+  "DELETE FROM doubles_pairs WHERE pid = ? AND did <> ?",
+  [pid, doubles.did]
+);
+// Then upsert the current pairing
+await query(
+  "INSERT INTO doubles_pairs (did, pid, partner_pid) VALUES (?,?,?) ON DUPLICATE KEY UPDATE ...",
+  [doubles.did, pid, doubles.partnerPid]
+);
+```
+
+**Rule:** When a table can accumulate orphaned rows from previous states (partner changes, team reassignments), delete stale entries before upserting. The DELETE predicate must keep the current record (`did <> ?`) and remove only rows for the same participant (`pid = ?`).
+
+**Files:**
+- Implementation: `src/utils/portal/participant-db.js` -- `upsertDoublesPair()`
+- Test: `tests/unit/doubles-pair-update.test.js`
 
 ### Sequential SSR Fetch Consolidation
 

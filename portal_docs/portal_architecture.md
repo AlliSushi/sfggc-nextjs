@@ -1,6 +1,6 @@
 ---
 title: Portal Architecture
-updated: 2026-01-29
+updated: 2026-02-13
 ---
 
 ## Summary
@@ -147,6 +147,7 @@ Acceptance criteria (BDD-style):
 - `POST /api/portal/admins/:id/force-password-change`
 - `POST /api/portal/admin/import-lanes`
 - `GET /api/portal/admin/lane-assignments`
+- `GET /api/portal/admin/possible-issues`
 - `GET /api/portal/teams/:teamSlug`
 
 ## Proposed API Contracts (initial)
@@ -486,6 +487,15 @@ See [portal_database_architecture.md](portal_database_architecture.md#scores-tab
 
 - CSV seed script for local/staging data.
 - XML import via admin dashboard and `/api/portal/admin/import-xml`.
+- CSV lane import via admin dashboard and `/api/portal/admin/import-lanes`.
+
+### Null-Preservation on Re-Import
+
+Both XML and CSV imports preserve existing database values when the import file does not provide data for a field. This prevents re-imports from accidentally wiping out previously imported data.
+
+**XML Import** (`importIgboXml.js`): The scores upsert uses `COALESCE(VALUES(col), col)` for `lane`, `game1`, `game2`, and `game3` fields. If the XML does not include a value for these columns, the existing database value is retained. The `entering_avg` and `handicap` fields overwrite unconditionally because IGBO XML always provides a book average.
+
+**CSV Lane Import** (`importLanesCsv.js`): Empty CSV cells do not overwrite existing lane values. The `wouldClobberExisting(newValue, oldValue)` predicate detects when an import would replace an existing database value with null, and skips that change. Only non-null CSV values that differ from the current database value trigger updates.
 
 ## Lane Assignments
 
@@ -532,6 +542,39 @@ Lane values are normalized: empty strings and `#N/A` are treated as null.
 - `tests/unit/lane-assignments.test.js`
 - `tests/unit/event-constants.test.js`
 - `tests/integration/lane-assignments-api.test.js`
+
+## Possible Issues (Data Quality Monitor)
+
+### Overview
+
+The admin dashboard includes a "Possible Issues" section that detects data quality problems after XML imports. The section appears automatically when more than 50% of participants have lane assignments and at least one issue exists.
+
+### Issue Categories
+
+1. **No team, no lane, no partner** -- Participants missing all three: team assignment, lane assignments, and doubles partner
+2. **Partner listed for multiple people** -- A participant appears as `partner_pid` in more than one `doubles_pairs` row
+3. **Multiple partners assigned** -- A participant has more than one distinct `partner_pid` across their `doubles_pairs` rows
+4. **Non-reciprocal doubles mappings** -- Participant A lists B as partner, but B does not list A (missing reverse mapping)
+5. **Lanes without team** -- Participants who have lane assignments in the `scores` table but no `tnmt_id` in `people`
+
+### Visibility Rule
+
+The section is hidden when lane coverage is below 50% (i.e., fewer than half of non-admin participants have at least one lane assignment). This avoids showing misleading issue counts before lane data is imported. Admin-linked participants (`admins.pid IS NOT NULL`) are excluded from all counts and queries.
+
+### Files
+
+**Backend:**
+- `src/pages/api/portal/admin/possible-issues.js` -- API endpoint (admin-only)
+- `src/utils/portal/possible-issues.js` -- Query functions and issue builder
+
+**Frontend:**
+- `src/components/Portal/PossibleIssuesCard/PossibleIssuesCard.js` -- Dashboard card component
+- `src/pages/portal/admin/dashboard.js` -- Renders the card when `showSection` is true
+
+**Test Coverage:**
+- `tests/unit/possible-issues-utils.test.js`
+- `tests/unit/possible-issues-route.test.js`
+- `tests/frontend/dashboard-possible-issues.test.js`
 
 ## Force Password Change
 

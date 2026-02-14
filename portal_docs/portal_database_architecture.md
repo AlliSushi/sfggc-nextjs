@@ -1,6 +1,6 @@
 ---
 title: Portal Database Architecture
-updated: 2026-01-29
+updated: 2026-02-13
 ---
 
 ## Summary
@@ -195,6 +195,27 @@ See [MIGRATIONS.md](../deploy_docs/MIGRATIONS.md) for details on the migration s
 - Book average 170 → Handicap = floor((225 - 170) * 0.9) = floor(49.5) = 49
 - Book average 200 → Handicap = floor((225 - 200) * 0.9) = floor(22.5) = 22
 - Book average 225 → Handicap = floor((225 - 225) * 0.9) = 0
+
+### Null-Preservation on Re-Import
+
+The scores upsert in `importIgboXml.js` uses `COALESCE(VALUES(col), col)` for fields that may not be present in every import source:
+
+```sql
+on duplicate key update
+  lane = COALESCE(values(lane), lane),
+  game1 = COALESCE(values(game1), game1),
+  game2 = COALESCE(values(game2), game2),
+  game3 = COALESCE(values(game3), game3),
+  entering_avg = values(entering_avg),
+  handicap = values(handicap),
+  updated_at = now()
+```
+
+**COALESCE fields** (`lane`, `game1`, `game2`, `game3`): If the import provides NULL for these columns, the existing database value is retained. This prevents XML re-imports from wiping out lane assignments imported via CSV, or game scores entered separately.
+
+**Unconditional fields** (`entering_avg`, `handicap`): These always overwrite because IGBO XML always provides a book average, and handicap is auto-calculated from it.
+
+The CSV lane import (`importLanesCsv.js`) applies the same principle using the `wouldClobberExisting(newValue, oldValue)` predicate: empty CSV cells do not overwrite existing lane values.
 
 ### XML Import: Handling Attributes
 

@@ -159,7 +159,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 - Authentication: `POST /api/portal/admin/login`, `POST /api/portal/participant/login`, `GET /api/portal/participant/verify`
 - Data: `GET /api/portal/participants`, `GET /api/portal/participants/[pid]`, `PATCH /api/portal/participants/[pid]`
 - Admin management: `GET/PATCH /api/portal/admins/[id]`, `POST /api/portal/admins/[id]/force-password-change`
-- Admin: `POST /api/portal/admin/import-xml`, `POST /api/portal/admin/import-lanes`, `GET /api/portal/admin/lane-assignments`, `GET /api/portal/admin/audit`
+- Admin: `POST /api/portal/admin/import-xml`, `POST /api/portal/admin/import-lanes`, `GET /api/portal/admin/lane-assignments`, `GET /api/portal/admin/possible-issues`, `GET /api/portal/admin/audit`
 
 **Note:** Sub-routes use `[id]/index.js` pattern. See `CLAUDE-PATTERNS.md#Next.js API Route Patterns`
 
@@ -176,7 +176,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 **Core Tables:**
 - `people` - Participant records (PID from IGBO, demographics, team/doubles references)
 - `teams` - Tournament teams (tnmt_id, team_name, slug)
-- `doubles_pairs` - Doubles partnerships (did, pid, partner_pid)
+- `doubles_pairs` - Doubles partnerships (did, pid, partner_pid). JOIN on `p.did = dp.did`, never on `pid`. Stale rows cleaned by `upsertDoublesPair`
 - `scores` - Game scores (pid + event_type: team/doubles/singles, 3 games each, book average, auto-calculated handicap)
 - `admins` - Admin users (UUID, email, password_hash, role, optional PID link)
 - `audit_logs` - Change tracking (admin, participant, field, old_value, new_value)
@@ -186,6 +186,7 @@ There is **no separate backend server**. The "backend" is implemented via:
 **Key Patterns:**
 - **Import-first:** IGBO XML imports populate database via `importIgboXml.js`
 - **Upsert:** Import scripts update existing records or insert new ones (idempotent)
+- **Null-preservation:** Re-imports preserve existing values when the import source lacks data for a field. XML uses `COALESCE(VALUES(col), col)` for `lane`/`game1-3`; CSV uses `wouldClobberExisting()` predicate
 - **Unique constraints:** `scores(pid, event_type)` ensures one record per participant per event, enables ON DUPLICATE KEY UPDATE
 - **Auto-calculation:** Handicap = floor((225 - bookAverage) * 0.9), calculated automatically, never manually editable
 - **Audit logging:** All admin edits tracked with before/after values
@@ -203,6 +204,9 @@ There is **no separate backend server**. The "backend" is implemented via:
 | **XML attribute parsing** | fast-xml-parser stores attributes as `{'#text': value, '@_attr': attrValue}` | `person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE` |
 | **Database migrations** | Must be idempotent, check existence before applying | Query `information_schema` before ALTER, clean duplicates before adding constraints |
 | **No correlated subqueries** | Use LEFT JOIN for list endpoints, never SELECT subqueries | See `CLAUDE-PATTERNS.md#N+1 Correlated Subqueries -> LEFT JOINs` |
+| **Import null-preservation** | Import upserts must never clobber existing data with nulls | SQL: `COALESCE(VALUES(col), col)`; App: `wouldClobberExisting()`. See `CLAUDE-PATTERNS.md#COALESCE Guard for Import Upserts` |
+| **doubles_pairs JOIN** | Always join on `p.did = dp.did`, never `p.pid = dp.pid` | Joining on `pid` returns stale rows from previous pairings. See `CLAUDE-PATTERNS.md#N+1 Correlated Subqueries -> LEFT JOINs` |
+| **Stale row cleanup** | DELETE orphaned rows before upserting when entities change ownership | `upsertDoublesPair` deletes stale `doubles_pairs` rows before INSERT. See `CLAUDE-PATTERNS.md#Stale Row Cleanup Before Upsert` |
 
 **Migration Requirements:**
 - Executable script in `backend/scripts/migrations/`
@@ -286,17 +290,19 @@ Most components are sections with:
 - `src/utils/portal/session.js` - Authentication and session tokens
 - `src/utils/portal/auth-guards.js` - Request authentication middleware
 - `src/utils/portal/audit.js` - Audit log writing
-- `src/utils/portal/importIgboXml.js` - XML import parser (handles BOOK_AVERAGE attributes, extracts #text property)
-- `src/utils/portal/participant-db.js` - Participant data access, handicap auto-calculation in upsertScores()
+- `src/utils/portal/importIgboXml.js` - XML import parser (handles BOOK_AVERAGE attributes, extracts #text property, COALESCE null-preservation)
+- `src/utils/portal/participant-db.js` - Participant data access, handicap auto-calculation in upsertScores(), stale doubles_pairs cleanup in upsertDoublesPair()
 - `src/pages/api/portal/participants/[pid].js` - Participant CRUD API
 - `src/pages/api/portal/admin/login.js` - Admin authentication
 - `src/pages/api/portal/admin/import-xml.js` - XML import endpoint
 - `src/pages/api/portal/admin/import-lanes.js` - CSV lane import endpoint (preview + import)
 - `src/pages/api/portal/admin/lane-assignments.js` - Lane assignments display endpoint
-- `src/utils/portal/importLanesCsv.js` - CSV lane import business logic
+- `src/utils/portal/importLanesCsv.js` - CSV lane import business logic with `wouldClobberExisting` null-preservation guard
 - `src/utils/portal/lane-assignments.js` - Lane assignment display builder (odd-lane pairing)
 - `src/utils/portal/csv.js` - CSV parser
 - `src/utils/portal/event-constants.js` - EVENT_TYPES constants (team, doubles, singles)
+- `src/pages/api/portal/admin/possible-issues.js` - Data quality monitor endpoint
+- `src/utils/portal/possible-issues.js` - Data quality issue detection (5 categories: missing team/lane/partner, duplicate partners, non-reciprocal doubles, multiple partners, lanes without teams)
 
 **Database Migrations:**
 - `backend/scripts/migrations/add-scores-unique-constraint.sh` - Adds unique index on scores(pid, event_type)
@@ -345,10 +351,20 @@ The database connection automatically handles:
 3. Parser (`importIgboXml.js`) extracts people, teams, doubles pairs, scores, book averages
 4. Parser handles XML attributes: `person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE`
 5. Transaction-wrapped upsert to database (preserves IGBO IDs)
-6. Handicap auto-calculated from book average: `floor((225 - bookAverage) * 0.9)`
-7. Unique constraint `scores(pid, event_type)` ensures idempotent updates
-8. Links existing admins to imported participants by email/phone
-9. Returns import summary
+6. COALESCE guards prevent nulls from overwriting existing data (e.g., lane assignments). See `CLAUDE-PATTERNS.md#COALESCE Guard for Import Upserts`
+7. Handicap auto-calculated from book average: `floor((225 - bookAverage) * 0.9)`
+8. Unique constraint `scores(pid, event_type)` ensures idempotent updates
+9. Links existing admins to imported participants by email/phone
+10. Returns import summary
+
+### Lane Import Flow
+
+1. Admin uploads CSV via admin dashboard
+2. `POST /api/portal/admin/import-lanes` receives CSV (supports preview and import modes)
+3. Parser (`importLanesCsv.js`) extracts lane assignments per participant and event
+4. `wouldClobberExisting()` predicate filters out changes that would overwrite existing non-null values with nulls. See `CLAUDE-PATTERNS.md#COALESCE Guard for Import Upserts`
+5. Transaction-wrapped upsert to database
+6. Returns import summary with change counts and skipped clobber warnings
 
 ### Authentication Flow
 
@@ -388,7 +404,7 @@ BDD workflow methodology is defined in the user-level `~/.claude/CLAUDE.md`. Thi
 
 **Test Types:**
 - **Static source analysis** -- read file contents, assert structural properties (imports, exports, naming, guard clauses). See `tests/unit/no-server-imports-frontend.test.js`, `tests/unit/refactoring-dry.test.js`.
-- **Behavioral tests** -- exercise functions/modules with inputs, assert outputs. See `backend/tests/api/audit.test.js`.
+- **Behavioral tests** -- exercise functions/modules with inputs, assert outputs. See `backend/tests/api/audit.test.js`, `tests/unit/import-xml-no-clobber.test.js`, `tests/unit/import-lanes-csv.test.js`, `tests/unit/doubles-pair-update.test.js`.
 - **Route existence tests** -- verify expected files exist on disk. See `tests/frontend/portal-routes.test.js`.
 
 **See `CLAUDE-PATTERNS.md#BDD Test Patterns` for test implementation patterns.**
