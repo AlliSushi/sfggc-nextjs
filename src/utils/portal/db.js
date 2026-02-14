@@ -1,18 +1,8 @@
 import mysql from "mysql2/promise";
-import fs from "fs";
+import socketUtils from "./mysql-socket.cjs";
 
 let pool;
-
-function getSocketPath() {
-  if (process.env.MYSQL_UNIX_SOCKET && fs.existsSync(process.env.MYSQL_UNIX_SOCKET)) {
-    return process.env.MYSQL_UNIX_SOCKET;
-  }
-  const candidates = ["/tmp/mysql.sock", "/opt/homebrew/var/mysql/mysql.sock", "/usr/local/var/mysql/mysql.sock"];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
+const { getSocketPath } = socketUtils;
 
 const getPool = () => {
   if (pool) {
@@ -89,4 +79,12 @@ const withTransaction = async (fn) => {
   }
 };
 
-export { query, withTransaction };
+/** Close the shared pool. Used by integration tests to prevent process hang. */
+const closePool = async () => {
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
+};
+
+export { query, withTransaction, closePool };

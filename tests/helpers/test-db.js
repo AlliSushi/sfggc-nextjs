@@ -1,17 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const mysql = require("mysql2/promise");
-
-function getSocketPath() {
-  if (process.env.MYSQL_UNIX_SOCKET && fs.existsSync(process.env.MYSQL_UNIX_SOCKET)) {
-    return process.env.MYSQL_UNIX_SOCKET;
-  }
-  const candidates = ["/tmp/mysql.sock", "/opt/homebrew/var/mysql/mysql.sock", "/usr/local/var/mysql/mysql.sock"];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
+const { getSocketPath } = require("../../src/utils/portal/mysql-socket.cjs");
 
 const findEnvLocal = (startDir) => {
   let current = startDir;
@@ -68,28 +58,34 @@ const getTestDatabaseUrl = () => {
   }
 };
 
-const ensureDatabaseExists = async (testUrl) => {
-  const url = new URL(testUrl);
-  const dbName = url.pathname.replace(/^\//, "");
+const createPoolFromUrl = (rawUrl, { databaseOverride = null, multipleStatements = true } = {}) => {
+  const url = new URL(rawUrl);
   const host = url.hostname || "localhost";
   const hasPassword = !!url.password;
   const socketPath = getSocketPath();
   const useSocket = (host === "localhost" || host === "127.0.0.1") && !hasPassword && socketPath;
 
-  let pool;
   if (useSocket) {
     const user = url.username === "root" ? process.env.USER : url.username;
-    pool = mysql.createPool({
+    return mysql.createPool({
       user: user || url.username,
-      database: "mysql",
+      database: databaseOverride || url.pathname.replace(/^\//, "") || "mysql",
       socketPath,
-      multipleStatements: true,
+      multipleStatements,
     });
-  } else {
-    const adminUrl = new URL(testUrl);
-    adminUrl.pathname = "/mysql";
-    pool = mysql.createPool({ uri: adminUrl.toString(), multipleStatements: true });
   }
+
+  const poolUrl = new URL(rawUrl);
+  if (databaseOverride) {
+    poolUrl.pathname = `/${databaseOverride}`;
+  }
+  return mysql.createPool({ uri: poolUrl.toString(), multipleStatements });
+};
+
+const ensureDatabaseExists = async (testUrl) => {
+  const url = new URL(testUrl);
+  const dbName = url.pathname.replace(/^\//, "");
+  const pool = createPoolFromUrl(testUrl, { databaseOverride: "mysql" });
 
   try {
     const [rows] = await pool.query(
@@ -119,11 +115,16 @@ const dropAll = async (pool) => {
   await pool.query("set foreign_key_checks = 1");
 };
 
+const TABLES_TO_TRUNCATE = [
+  "audit_logs", "scores", "doubles_pairs", "people", "teams",
+  "participant_login_tokens", "admin_actions", "admin_password_resets", "admins",
+];
+
 const truncateAll = async (pool) => {
   await pool.query("set foreign_key_checks = 0");
-  await pool.query(
-    "truncate table audit_logs, scores, doubles_pairs, people, teams, participant_login_tokens, admin_actions, admin_password_resets, admins"
-  );
+  for (const table of TABLES_TO_TRUNCATE) {
+    await pool.query(`truncate table ${table}`);
+  }
   await pool.query("set foreign_key_checks = 1");
 };
 
@@ -138,26 +139,7 @@ const initTestDb = async () => {
   await ensureDatabaseExists(testUrl);
   process.env.PORTAL_DATABASE_URL = testUrl;
 
-  // Auto-detect socket connection for localhost without password
-  const url = new URL(testUrl);
-  const host = url.hostname || "localhost";
-  const hasPassword = !!url.password;
-  const socketPath = getSocketPath();
-  const useSocket = (host === "localhost" || host === "127.0.0.1") && !hasPassword && socketPath;
-
-  let pool;
-  if (useSocket) {
-    const user = url.username === "root" ? process.env.USER : url.username;
-    const database = url.pathname.replace(/^\//, "") || "mysql";
-    pool = mysql.createPool({
-      user: user || url.username,
-      database,
-      socketPath,
-      multipleStatements: true,
-    });
-  } else {
-    pool = mysql.createPool({ uri: testUrl, multipleStatements: true });
-  }
+  const pool = createPoolFromUrl(testUrl);
 
   await dropAll(pool);
   await applySchema(pool);
