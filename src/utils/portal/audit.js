@@ -48,4 +48,19 @@ const writeAuditEntries = async (adminEmail, pid, changes, query = defaultQuery)
   );
 };
 
-export { buildAuditEntries, writeAuditEntries };
+const logAdminAction = async (
+  adminEmail,
+  action,
+  details,
+  query = defaultQuery
+) => {
+  await query(
+    `
+    insert into admin_actions (id, admin_email, action, details)
+    values (?,?,?,?)
+    `,
+    [randomUUID(), adminEmail, action, normalizeValue(details)]
+  );
+};
+
+export { buildAuditEntries, writeAuditEntries, logAdminAction };

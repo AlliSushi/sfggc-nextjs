@@ -1,10 +1,9 @@
 import fs from "fs";
-import { randomUUID } from "crypto";
 import { IncomingForm } from "formidable";
 import { importIgboXml } from "../../../../utils/portal/importIgboXml.js";
-import { query } from "../../../../utils/portal/db.js";
 import { methodNotAllowed } from "../../../../utils/portal/http.js";
 import { requireSuperAdmin } from "../../../../utils/portal/auth-guards.js";
+import { logAdminAction } from "../../../../utils/portal/audit.js";
 
 export const config = {
   api: {
@@ -24,7 +23,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const adminSession = requireSuperAdmin(req, res);
+  const adminSession = await requireSuperAdmin(req, res);
   if (!adminSession) return;
 
   const form = new IncomingForm({
@@ -59,13 +58,7 @@ export default async function handler(req, res) {
 
       const xmlText = readFile(fileEntry);
       const summary = await importIgboXml(xmlText);
-      await query(
-        `
-        insert into admin_actions (id, admin_email, action, details)
-        values (?,?,?,?)
-        `,
-        [randomUUID(), adminSession.email || "admin@local", "import_xml", JSON.stringify(summary)]
-      );
+      await logAdminAction(adminSession.email, "import_xml", summary);
       res.status(200).json({ ok: true, summary });
     } catch (error) {
       res.status(500).json({ error: error.message || "Import failed." });
