@@ -203,7 +203,7 @@ const fetchParticipantWithMultiplePartners = async (queryFn) => {
       group_concat(distinct concat(dp.partner_pid, ':', pp.first_name, ' ', pp.last_name)
         order by pp.last_name, pp.first_name separator ' | ') as partner_list
     from doubles_pairs dp
-    left join people p on p.pid = dp.pid
+    join people p on p.did = dp.did
     left join people pp on pp.pid = dp.partner_pid
     group by dp.pid, p.first_name, p.last_name
     having count(distinct dp.partner_pid) > 1

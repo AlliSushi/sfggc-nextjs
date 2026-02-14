@@ -183,6 +183,26 @@ describe("possible issues NULL partner_pid exclusion", () => {
     );
   });
 
+  it("Given fetchParticipantWithMultiplePartners SQL, when querying doubles_pairs, then it joins people on did to exclude stale rows", () => {
+    const fnMatch = possibleIssuesSrc.match(
+      /const fetchParticipantWithMultiplePartners[\s\S]*?return rows;\s*\};/
+    )?.[0] || "";
+
+    assert.ok(
+      fnMatch.length > 0,
+      "fetchParticipantWithMultiplePartners function must exist"
+    );
+
+    // The JOIN between doubles_pairs and people must use dp.did = p.did (not dp.pid = p.pid)
+    // to exclude stale doubles_pairs rows from previous pairings
+    const sqlLower = fnMatch.toLowerCase();
+    assert.ok(
+      sqlLower.includes("join people p on p.did = dp.did") ||
+        sqlLower.includes("join people p on dp.did = p.did"),
+      "fetchParticipantWithMultiplePartners must JOIN people on did (p.did = dp.did) to exclude stale doubles_pairs rows"
+    );
+  });
+
   it("Given buildPossibleIssuesReport with cleared partner_pid rows, when report is built, then no false positive issues appear for NULL partner_pid", async () => {
     // Simulate a database where 2 participants have partner_pid = NULL in doubles_pairs
     // This should NOT produce any partner-related issues
@@ -206,6 +226,37 @@ describe("possible issues NULL partner_pid exclusion", () => {
       falsePositive,
       undefined,
       "No partner-target-multiple-owners issue should exist when all partner_pid values are NULL"
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stale doubles_pairs rows must not cause false "multiple partners" issues
+// ---------------------------------------------------------------------------
+
+describe("possible issues stale doubles_pairs exclusion", () => {
+  it("Given a participant with stale doubles_pairs rows (different did), when fetchParticipantWithMultiplePartners runs, then stale rows are excluded", async () => {
+    // Simulate: PID 3219 has current did=D100, but also has a stale row with did=D200
+    // The query should only count rows where dp.did matches the participant's current did
+    const queryStub = async (sql) => {
+      if (sql.includes("select count(*) as count") && sql.includes("from people p")) {
+        return { rows: [{ count: 10 }] };
+      }
+      if (sql.includes("count(distinct s.pid) as count")) {
+        return { rows: [{ count: 8 }] };
+      }
+      // The multiple-partners query should filter by did, so no rows returned
+      return { rows: [] };
+    };
+
+    const report = await buildPossibleIssuesReport(queryStub);
+    const multiplePartners = report.issues.find(
+      (issue) => issue.key === "participant-with-multiple-partners"
+    );
+    assert.equal(
+      multiplePartners,
+      undefined,
+      "No participant-with-multiple-partners issue should exist when extra rows are stale (different did)"
     );
   });
 });
