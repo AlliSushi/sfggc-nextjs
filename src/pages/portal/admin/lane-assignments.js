@@ -23,6 +23,8 @@ const renderEntry = (entry, href) => {
   return href ? <Link href={href}>{entry.label}</Link> : entry.label;
 };
 
+const formatLanePairLabel = (lane) => `Lanes ${lane} & ${lane + 1}`;
+
 const LaneAssignmentsPage = ({ adminRole }) => {
   const router = useRouter();
   const [selectedEvent, setSelectedEvent] = useState(EVENT_TYPES.TEAM);
@@ -69,7 +71,7 @@ const LaneAssignmentsPage = ({ adminRole }) => {
     <div>
       <PortalShell
         title="Lane assignments"
-        subtitle="View odd-lane matchups for team, doubles, and singles events."
+        subtitle="View lane-pair matchups for team, doubles, and singles events."
       >
         <div className="row g-3 mb-4 align-items-end">
           <div className="col-12 col-md-8">
@@ -100,7 +102,7 @@ const LaneAssignmentsPage = ({ adminRole }) => {
             <table className="table table-striped align-middle">
               <thead>
                 <tr>
-                  <th>Lane</th>
+                  <th>Lanes</th>
                   <th>Lane N</th>
                   <th>Lane N+1</th>
                 </tr>
@@ -121,7 +123,7 @@ const LaneAssignmentsPage = ({ adminRole }) => {
                       <tr key={`${row.lane}-${index}`}>
                         {index === 0 && (
                           <td rowSpan={lineCount} className="align-top fw-semibold">
-                            Lane {row.lane}
+                            {formatLanePairLabel(row.lane)}
                           </td>
                         )}
                         <td>
