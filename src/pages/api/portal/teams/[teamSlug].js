@@ -20,6 +20,9 @@ const resolvePartner = ({ member, memberIndex, didIndex }) => {
   if (member.partner_pid && memberIndex.has(member.partner_pid)) {
     return memberIndex.get(member.partner_pid);
   }
+  // If a doubles_pairs entry exists (doubles_did is set), its partner_pid is authoritative
+  // even when null (meaning the partner was intentionally cleared). Skip fallbacks.
+  if (member.doubles_did) return null;
   if (member.did && didIndex.has(member.did)) {
     const partner = didIndex.get(member.did).find((pid) => pid !== member.pid);
     if (partner && memberIndex.has(partner)) {
@@ -160,6 +163,7 @@ const fetchTeamMembers = async (tnmtId) => {
         p.did,
         p.team_captain,
         p.team_order,
+        d.did as doubles_did,
         d.partner_pid,
         d.partner_first_name,
         d.partner_last_name,
@@ -168,7 +172,7 @@ const fetchTeamMembers = async (tnmtId) => {
         s.game2 as team_game2,
         s.game3 as team_game3
       from people p
-      left join doubles_pairs d on d.pid = p.pid
+      left join doubles_pairs d on d.did = p.did
       left join scores s on s.pid = p.pid and s.event_type = ?
       where p.tnmt_id = ?
       `,

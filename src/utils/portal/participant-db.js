@@ -42,7 +42,9 @@ const resolvePartner = async (pid, doubles, person, query = defaultQuery) => {
 
 const buildPartnerName = (partner, doubles) => {
   if (partner) return buildFullName(partner);
-  if (doubles?.partner_first_name || doubles?.partner_last_name) {
+  // Only use doubles name fields if partner_pid is set — when partner_pid is null
+  // (cleared by admin), the name fields are stale leftovers from XML import.
+  if (doubles?.partner_pid && (doubles?.partner_first_name || doubles?.partner_last_name)) {
     return `${doubles?.partner_first_name || ""} ${doubles?.partner_last_name || ""}`.trim();
   }
   return "";
@@ -75,7 +77,7 @@ const formatParticipant = async (pid, query = defaultQuery) => {
       partner2.nickname as partner2_nickname
     FROM people p
     LEFT JOIN teams t ON p.tnmt_id = t.tnmt_id
-    LEFT JOIN doubles_pairs dp ON p.pid = dp.pid
+    LEFT JOIN doubles_pairs dp ON p.did = dp.did
     LEFT JOIN people partner1 ON dp.partner_pid = partner1.pid
     LEFT JOIN people partner2 ON p.did = partner2.did AND p.pid <> partner2.pid
     WHERE p.pid = ?
@@ -112,8 +114,10 @@ const formatParticipant = async (pid, query = defaultQuery) => {
       last_name: person.partner1_last_name,
       nickname: person.partner1_nickname
     };
-  } else if (person.partner2_pid) {
-    // Partner resolved via p.did
+  } else if (person.partner2_pid && !person.doubles_did) {
+    // Partner resolved via p.did — only when no doubles_pairs entry exists.
+    // If doubles_pairs exists (doubles_did is set), its partner_pid is authoritative
+    // even when null (meaning the partner was intentionally cleared).
     partner = {
       pid: person.partner2_pid,
       first_name: person.partner2_first_name,
@@ -154,7 +158,7 @@ const formatParticipant = async (pid, query = defaultQuery) => {
     },
     doubles: {
       did: person.did,
-      partnerPid: doubles?.partner_pid || partner?.pid || "",
+      partnerPid: doubles?.partner_pid ?? partner?.pid ?? "",
       partnerName: buildPartnerName(partner, doubles),
     },
     lanes: {
@@ -246,8 +250,24 @@ const upsertTeam = async (team, query = defaultQuery) => {
   );
 };
 
+const cleanupDoublesPairs = async (pid, query = defaultQuery) => {
+  // Remove all doubles_pairs rows where this participant is the owner
+  await query("DELETE FROM doubles_pairs WHERE pid = ?", [pid]);
+  // Clear partner_pid references to this participant in other people's rows
+  await query(
+    "UPDATE doubles_pairs SET partner_pid = NULL WHERE partner_pid = ?",
+    [pid]
+  );
+};
+
 const upsertDoublesPair = async (pid, doubles, query = defaultQuery) => {
   if (!doubles?.did) return;
+
+  // Remove stale doubles_pairs entries for this participant (from previous pairings)
+  await query(
+    "DELETE FROM doubles_pairs WHERE pid = ? AND did <> ?",
+    [pid, doubles.did]
+  );
 
   await query(
     `
