@@ -112,11 +112,16 @@ const getCurrentLanesMap = async (participants, query) => {
   return lanesByPid;
 };
 
+/** Null import value should not overwrite an existing database value. */
+const wouldClobberExisting = (newValue, oldValue) =>
+  newValue === null && oldValue !== null;
+
 const computeLaneChanges = (newLanes, currentLanes) => {
   const changes = [];
   for (const [eventType, auditField] of Object.entries(EVENT_LANE_FIELDS)) {
     const newLane = newLanes[eventType] ?? null;
     const oldLane = currentLanes[eventType] ?? null;
+    if (wouldClobberExisting(newLane, oldLane)) continue;
     if (newLane !== oldLane) {
       changes.push({ eventType, auditField, oldLane, newLane });
     }
@@ -166,4 +171,4 @@ const importLanes = async (matched, adminEmail, query) => {
   return { updated, skipped };
 };
 
-export { normalizeLaneValue, validateColumns, matchParticipants, importLanes, REQUIRED_COLUMNS };
+export { normalizeLaneValue, validateColumns, matchParticipants, importLanes, wouldClobberExisting, REQUIRED_COLUMNS };

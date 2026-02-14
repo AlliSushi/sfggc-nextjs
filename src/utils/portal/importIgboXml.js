@@ -308,10 +308,10 @@ const importIgboXml = async (xmlText) => {
         )
         values (?,?,?,?,?,?,?,?,?, now())
         on duplicate key update
-          lane = values(lane),
-          game1 = values(game1),
-          game2 = values(game2),
-          game3 = values(game3),
+          lane = COALESCE(values(lane), lane),
+          game1 = COALESCE(values(game1), game1),
+          game2 = COALESCE(values(game2), game2),
+          game3 = COALESCE(values(game3), game3),
           entering_avg = values(entering_avg),
           handicap = values(handicap),
           updated_at = now()

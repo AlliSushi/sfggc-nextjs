@@ -1,11 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import {
   normalizeLaneValue,
   validateColumns,
   matchParticipants,
   importLanes,
+  wouldClobberExisting,
 } from "../../src/utils/portal/importLanesCsv.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
 // normalizeLaneValue
@@ -34,6 +40,39 @@ describe("normalizeLaneValue", () => {
 
   it('Given "  15  " (padded with spaces), when normalized, then returns "15"', () => {
     assert.strictEqual(normalizeLaneValue("  15  "), "15");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// wouldClobberExisting
+// ---------------------------------------------------------------------------
+
+describe("wouldClobberExisting", () => {
+  it("Given null new value and non-null old value, when checked, then returns true", () => {
+    assert.strictEqual(wouldClobberExisting(null, "27"), true);
+  });
+
+  it("Given null new value and null old value, when checked, then returns false", () => {
+    assert.strictEqual(wouldClobberExisting(null, null), false);
+  });
+
+  it("Given non-null new value and non-null old value, when checked, then returns false", () => {
+    assert.strictEqual(wouldClobberExisting("5", "27"), false);
+  });
+
+  it("Given non-null new value and null old value, when checked, then returns false", () => {
+    assert.strictEqual(wouldClobberExisting("5", null), false);
+  });
+
+  it("Given computeLaneChanges source, when inspected, then it uses wouldClobberExisting predicate", () => {
+    const src = fs.readFileSync(
+      path.join(__dirname, "../../src/utils/portal/importLanesCsv.js"),
+      "utf-8"
+    );
+    assert.ok(
+      src.includes("wouldClobberExisting("),
+      "computeLaneChanges must use the wouldClobberExisting predicate"
+    );
   });
 });
 
@@ -440,6 +479,62 @@ describe("importLanes", () => {
     assert.ok(
       paramsString.includes("1") && paramsString.includes("5"),
       "Audit entry must include old value '1' and new value '5'"
+    );
+  });
+
+  it("Given CSV row with empty lane and DB has existing lane, when imported, then existing lane is preserved", async () => {
+    // Arrange — PID 100 has existing lane "27" for team, CSV has null (empty cell)
+    const { mockQuery, calls } = createImportMockQuery({
+      "100": { team: "27", doubles: "1", singles: "37" },
+    });
+    const matched = [
+      matchedRow({ lanes: { team: null, doubles: null, singles: null } }),
+    ];
+
+    // Act
+    const result = await importLanes(matched, "admin@example.com", mockQuery);
+
+    // Assert — should skip because empty CSV should not overwrite existing data
+    assert.strictEqual(result.skipped, 1, "Expected 1 participant skipped (empty CSV should not overwrite)");
+    assert.strictEqual(result.updated, 0, "Expected 0 participants updated");
+
+    const upsertCalls = calls.filter(
+      (c) => c.sql.includes("INSERT") && c.sql.includes("scores")
+    );
+    assert.strictEqual(
+      upsertCalls.length,
+      0,
+      "Expected no lane upsert calls when CSV lanes are empty and DB has values"
+    );
+  });
+
+  it("Given CSV row with partial empty lanes and DB has existing values, when imported, then only non-empty CSV lanes are updated", async () => {
+    // Arrange — PID 100 has existing lanes, CSV updates doubles but team/singles are empty
+    const { mockQuery, calls } = createImportMockQuery({
+      "100": { team: "27", doubles: "1", singles: "37" },
+    });
+    const matched = [
+      matchedRow({ lanes: { team: null, doubles: "5", singles: null } }),
+    ];
+
+    // Act
+    const result = await importLanes(matched, "admin@example.com", mockQuery);
+
+    // Assert — only doubles should be updated
+    assert.strictEqual(result.updated, 1, "Expected 1 participant updated (doubles changed)");
+
+    const upsertCalls = calls.filter(
+      (c) => c.sql.includes("INSERT") && c.sql.includes("scores")
+    );
+    assert.strictEqual(
+      upsertCalls.length,
+      1,
+      "Expected exactly 1 lane upsert call (only doubles changed)"
+    );
+    // Verify it's the doubles update
+    assert.ok(
+      upsertCalls[0].params.includes("doubles"),
+      "The upsert should be for the doubles event type"
     );
   });
 
