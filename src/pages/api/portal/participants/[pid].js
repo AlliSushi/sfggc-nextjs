@@ -7,6 +7,8 @@ import {
   buildChanges,
   resolveParticipantUpdates,
   applyParticipantUpdates,
+  checkPartnerConflict,
+  upsertReciprocalPartner,
 } from "../../../../utils/portal/participant-db.js";
 
 const resolveAdminEmail = (sessions) =>
@@ -40,16 +42,47 @@ const handlePatch = async (req, res, pid) => {
   }
 
   const rawUpdates = req.body || {};
+  const forceReciprocal = rawUpdates.forceReciprocal === true;
   const isParticipantOnly = Boolean(
     sessions.participantSession && !sessions.adminSession
   );
   const updates = resolveParticipantUpdates(current, rawUpdates, isParticipantOnly);
   const adminEmail = resolveAdminEmail(sessions);
 
+  // Detect partner change (admin-only, non-empty new partner)
+  const partnerChanged = !isParticipantOnly &&
+    updates.doubles?.partnerPid &&
+    updates.doubles.partnerPid !== current.doubles?.partnerPid;
+
+  // Check for conflict before committing
+  if (partnerChanged && !forceReciprocal) {
+    const conflict = await checkPartnerConflict(updates.doubles.partnerPid, pid);
+    if (conflict) {
+      res.status(409).json({ conflict });
+      return;
+    }
+  }
+
   await withTransaction(async (query) => {
     await applyParticipantUpdates({ pid, updates, isParticipantOnly, query });
     const changes = buildChanges(current, updates);
     await writeAuditEntries(adminEmail, pid, changes, query);
+
+    // Auto-reciprocate when partner changed
+    if (partnerChanged) {
+      const partnerCurrent = await formatParticipant(updates.doubles.partnerPid, query);
+      const oldPartnerPid = partnerCurrent?.doubles?.partnerPid || "";
+
+      await upsertReciprocalPartner(updates.doubles.partnerPid, pid, query);
+
+      // Audit the reciprocal change for the partner
+      if (oldPartnerPid !== pid) {
+        const reciprocalChanges = [
+          { field: "partner_pid", oldValue: oldPartnerPid, newValue: pid },
+        ];
+        await writeAuditEntries(adminEmail, updates.doubles.partnerPid, reciprocalChanges, query);
+      }
+    }
   });
 
   const updated = await formatParticipant(pid);

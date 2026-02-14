@@ -92,6 +92,7 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
   const [showRevokeAdmin, setShowRevokeAdmin] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
   const [revokeError, setRevokeError] = useState("");
+  const [partnerConflict, setPartnerConflict] = useState(null);
 
   const adminEmailHeader = useMemo(() => {
     if (process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
@@ -146,6 +147,38 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...adminEmailHeader },
       body: JSON.stringify(buildPayload(formState)),
+    });
+
+    if (response.status === 409) {
+      const data = await response.json();
+      setPartnerConflict(data.conflict);
+      setIsSaving(false);
+      return;
+    }
+
+    if (!response.ok) {
+      setError("Unable to save participant updates.");
+      setIsSaving(false);
+      return;
+    }
+
+    const updated = await response.json();
+    setParticipant(updated);
+    setFormState(buildFormState(updated));
+    setIsEditing(false);
+    setIsSaving(false);
+  };
+
+  const handleForceReciprocal = async () => {
+    setIsSaving(true);
+    setPartnerConflict(null);
+
+    const payload = { ...buildPayload(formState), forceReciprocal: true };
+
+    const response = await portalFetch(`/api/portal/participants/${pid}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...adminEmailHeader },
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -311,6 +344,43 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
               This action will be recorded in the audit log.
             </p>
             {revokeError && <div className="alert alert-danger mt-3">{revokeError}</div>}
+          </PortalModal>
+        )}
+
+        {partnerConflict && (
+          <PortalModal
+            title="Replace existing doubles partner?"
+            onClose={() => { if (!isSaving) setPartnerConflict(null); }}
+            actions={
+              <>
+                <button
+                  className="btn btn-outline-secondary"
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => setPartnerConflict(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-warning"
+                  type="button"
+                  disabled={isSaving}
+                  onClick={handleForceReciprocal}
+                >
+                  {isSaving ? "Replacing..." : "Replace partner"}
+                </button>
+              </>
+            }
+          >
+            <p>
+              <strong>{partnerConflict.partnerName}</strong> is currently paired with{" "}
+              <strong>{partnerConflict.currentPartnerName}</strong>.
+            </p>
+            <p className="text-muted mb-0">
+              Replacing will set {partnerConflict.partnerName}&apos;s partner to{" "}
+              <strong>{participant?.firstName} {participant?.lastName}</strong> and remove the
+              existing pairing.
+            </p>
           </PortalModal>
         )}
       </PortalShell>

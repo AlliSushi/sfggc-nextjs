@@ -391,9 +391,84 @@ const applyParticipantUpdates = async ({ pid, updates, isParticipantOnly, query 
   await upsertPerson(pid, updates, query);
   if (!isParticipantOnly) {
     await upsertTeam(updates.team, query);
-    await upsertDoublesPair(pid, updates.doubles, query);
+    if (updates.doubles?.did) {
+      await upsertDoublesPair(pid, updates.doubles, query);
+    } else {
+      // Doubles ID cleared (team removed) — cascade cleanup
+      await cleanupDoublesPairs(pid, query);
+    }
     await upsertScores(pid, updates, query);
   }
+};
+
+const checkPartnerConflict = async (newPartnerPid, currentPid, query = defaultQuery) => {
+  const { rows } = await query(
+    `
+    SELECT dp.partner_pid,
+           p.first_name, p.last_name,
+           cp.first_name AS current_partner_first, cp.last_name AS current_partner_last
+    FROM doubles_pairs dp
+    JOIN people p ON p.pid = dp.pid
+    LEFT JOIN people cp ON cp.pid = dp.partner_pid
+    WHERE dp.pid = ?
+    `,
+    [newPartnerPid]
+  );
+
+  const row = rows?.[0];
+  if (!row) return null;
+  if (!row.partner_pid) return null;
+  if (row.partner_pid === currentPid) return null;
+
+  return {
+    partnerPid: newPartnerPid,
+    partnerName: `${row.first_name || ""} ${row.last_name || ""}`.trim(),
+    currentPartnerPid: row.partner_pid,
+    currentPartnerName: `${row.current_partner_first || ""} ${row.current_partner_last || ""}`.trim(),
+  };
+};
+
+const upsertReciprocalPartner = async (partnerPid, currentPid, query = defaultQuery) => {
+  // Look up partner's did from people table
+  const { rows } = await query(
+    "SELECT did FROM people WHERE pid = ?",
+    [partnerPid]
+  );
+  const partnerDid = rows?.[0]?.did;
+  if (!partnerDid) return; // Cannot reciprocate without a did (PK for doubles_pairs)
+
+  // Check if partner currently has a different partner (C)
+  const { rows: dpRows } = await query(
+    "SELECT partner_pid FROM doubles_pairs WHERE pid = ?",
+    [partnerPid]
+  );
+  const oldPartnerPid = dpRows?.[0]?.partner_pid;
+
+  // If partner B was pointing to C, clear C's reference to B
+  if (oldPartnerPid && oldPartnerPid !== currentPid) {
+    await query(
+      "UPDATE doubles_pairs SET partner_pid = NULL WHERE pid = ? AND partner_pid = ?",
+      [oldPartnerPid, partnerPid]
+    );
+  }
+
+  // Clean up stale doubles_pairs rows (same pattern as upsertDoublesPair)
+  await query(
+    "DELETE FROM doubles_pairs WHERE pid = ? AND did <> ?",
+    [partnerPid, partnerDid]
+  );
+
+  // Upsert partner's doubles_pairs row with reciprocal link
+  await query(
+    `
+    INSERT INTO doubles_pairs (did, pid, partner_pid)
+    VALUES (?,?,?)
+    ON DUPLICATE KEY UPDATE
+      pid = VALUES(pid),
+      partner_pid = VALUES(partner_pid)
+    `,
+    [partnerDid, partnerPid, currentPid]
+  );
 };
 
 export {
@@ -401,4 +476,6 @@ export {
   buildChanges,
   resolveParticipantUpdates,
   applyParticipantUpdates,
+  checkPartnerConflict,
+  upsertReciprocalPartner,
 };
