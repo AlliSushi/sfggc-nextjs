@@ -12,6 +12,7 @@ import AdminMenu from "../../../components/Portal/AdminMenu/AdminMenu";
 import useAdminSession from "../../../hooks/portal/useAdminSession.js";
 import { buildParticipantPageProps } from "../../../utils/portal/participant-page-ssr.js";
 import { portalFetch } from "../../../utils/portal/portal-fetch.js";
+import { normalizeQueryValue, resolveBackHref } from "../../../utils/portal/navigation.js";
 
 const DEFAULT_SCORES = ["", "", ""];
 
@@ -77,6 +78,8 @@ const buildPayload = (formState) => ({
 const ParticipantProfilePage = ({ participant: initialParticipant }) => {
   const router = useRouter();
   const { pid } = router.query;
+  const from = normalizeQueryValue(router.query.from);
+  const backHref = resolveBackHref(from, "/portal/admin/dashboard");
   const [participant, setParticipant] = useState(initialParticipant);
   const [formState, setFormState] = useState(buildFormState(initialParticipant));
   const [isEditing, setIsEditing] = useState(false);
@@ -195,8 +198,8 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
         <div className="row g-3 mb-3 align-items-end">
           <div className="col-12 col-md-6 d-flex flex-wrap gap-2 portal-actions">
           {isAdmin && (
-            <Link className="btn btn-outline-secondary" href="/portal/admin/dashboard">
-              Back to dashboard
+            <Link className="btn btn-outline-secondary" href={backHref}>
+              Back
             </Link>
           )}
           {isAdmin && !isEditing && (

@@ -138,7 +138,11 @@ const authorizeParticipant = async (teamSlug, participantSession, res) => {
 
 const fetchTeamBySlug = async (teamSlug) => {
   const { rows } = await query("select * from teams where slug = ?", [teamSlug]);
-  return rows?.[0] || null;
+  if (rows?.[0]) return rows[0];
+
+  // Fallback: match by generated slug from team_name for teams without a slug column
+  const { rows: allTeams } = await query("select * from teams where slug is null");
+  return allTeams?.find((t) => toTeamSlug(t.team_name) === teamSlug) || null;
 };
 
 const fetchTeamMembers = async (tnmtId) => {
@@ -159,6 +163,7 @@ const fetchTeamMembers = async (tnmtId) => {
         d.partner_pid,
         d.partner_first_name,
         d.partner_last_name,
+        s.lane as team_lane,
         s.game1 as team_game1,
         s.game2 as team_game2,
         s.game3 as team_game3
@@ -189,6 +194,11 @@ const extractTeamScores = (members) => {
   return scoreSource
     ? filterNonNull([scoreSource.team_game1, scoreSource.team_game2, scoreSource.team_game3])
     : [];
+};
+
+const extractTeamLane = (members) => {
+  const laneSource = members.find((member) => member.team_lane);
+  return laneSource?.team_lane || "";
 };
 
 const buildRosterResponse = (members) => {
@@ -231,6 +241,7 @@ export default async function handler(req, res) {
     const orderedMembers = orderRoster(members);
     const locationSource = resolveTeamLocation(orderedMembers);
     const teamScores = extractTeamScores(orderedMembers);
+    const teamLane = extractTeamLane(orderedMembers);
     const orderedRoster = buildRosterResponse(orderedMembers);
 
     res.status(200).json({
@@ -238,6 +249,7 @@ export default async function handler(req, res) {
         tnmtId: team.tnmt_id,
         name: team.team_name,
         slug: team.slug,
+        lane: teamLane,
         scores: teamScores,
         location: locationSource
           ? {

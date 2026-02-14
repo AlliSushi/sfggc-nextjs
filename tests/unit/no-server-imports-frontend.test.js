@@ -65,7 +65,7 @@ test(
 );
 
 test(
-  "Given a participant viewing their profile, when checking the page source, then the dashboard link is inside an isAdmin guard",
+  "Given a participant viewing their profile, when checking the page source, then the back link is inside an isAdmin guard",
   () => {
     const pidPagePath = path.join(
       process.cwd(),
@@ -73,45 +73,41 @@ test(
     );
     const content = fs.readFileSync(pidPagePath, "utf8");
     const lines = content.split("\n");
-    const dashboardLineIndex = lines.findIndex((line) =>
-      line.includes("Back to dashboard")
-    );
+    const dashboardLineIndex = lines.findIndex((line) => line.trim() === "Back");
     assert.ok(
       dashboardLineIndex > 0,
-      "Back to dashboard link should exist in [pid].js"
+      "Back link should exist in [pid].js"
     );
     const preceding = lines
       .slice(Math.max(0, dashboardLineIndex - 3), dashboardLineIndex)
       .join("\n");
     assert.ok(
       preceding.includes("isAdmin"),
-      "Back to dashboard link must be inside an isAdmin guard — participants should not see it"
+      "Back link must be inside an isAdmin guard — participants should not see it"
     );
   }
 );
 
 test(
-  "Given a participant viewing a team page, when checking TeamProfile source, then the dashboard link is inside an isAdmin guard",
+  "Given a participant viewing a team page, when checking Team page source, then the back link is inside an isAdmin guard",
   () => {
-    const teamProfilePath = path.join(
+    const teamPagePath = path.join(
       process.cwd(),
-      "src/components/Portal/TeamProfile/TeamProfile.js"
+      "src/pages/portal/team/[teamSlug].js"
     );
-    const content = fs.readFileSync(teamProfilePath, "utf8");
+    const content = fs.readFileSync(teamPagePath, "utf8");
     const lines = content.split("\n");
-    const dashboardLineIndex = lines.findIndex((line) =>
-      line.includes("Back to dashboard")
-    );
+    const dashboardLineIndex = lines.findIndex((line) => line.trim() === "Back");
     assert.ok(
       dashboardLineIndex > 0,
-      "Back to dashboard link should exist in TeamProfile.js"
+      "Back link should exist in Team page"
     );
     const preceding = lines
       .slice(Math.max(0, dashboardLineIndex - 3), dashboardLineIndex)
       .join("\n");
     assert.ok(
       preceding.includes("isAdmin"),
-      "Back to dashboard link in TeamProfile must be inside an isAdmin guard — participants should not see it"
+      "Back link in Team page must be inside an isAdmin guard — participants should not see it"
     );
   }
 );

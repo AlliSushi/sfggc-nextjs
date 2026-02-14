@@ -4,7 +4,13 @@ import styles from "./TeamProfile.module.scss";
 
 const TEAM_SIZE = 4;
 
-const TeamProfile = ({ team, roster = [], isAdmin = false }) => {
+const TeamProfile = ({
+  team,
+  roster = [],
+  isAdmin = false,
+  participantReturnTo = "",
+  appendFromParam = (href) => href,
+}) => {
   if (!team) {
     return (
       <section className={`${styles.TeamProfile} card`}>
@@ -36,6 +42,7 @@ const TeamProfile = ({ team, roster = [], isAdmin = false }) => {
         </div>
 
         <div className="mt-3">
+          <p className="mb-2">Lane: {team.lane || "—"}</p>
           <ScoreCard label="Team scores" scores={team.scores} />
         </div>
 
@@ -61,7 +68,12 @@ const TeamProfile = ({ team, roster = [], isAdmin = false }) => {
                         {member ? (
                           <>
                             <p className={`${styles.MemberName} mb-1 fw-semibold`}>
-                              <Link href={`/portal/participant/${member.pid}`}>
+                              <Link
+                                href={appendFromParam(
+                                  `/portal/participant/${member.pid}`,
+                                  participantReturnTo
+                                )}
+                              >
                                 {member.name}
                               </Link>
                               {member.isCaptain && (
@@ -83,13 +95,6 @@ const TeamProfile = ({ team, roster = [], isAdmin = false }) => {
               ))}
             </tbody>
           </table>
-          {isAdmin && (
-            <div className="mt-3">
-              <Link className="btn btn-outline-secondary btn-sm" href="/portal/admin/dashboard">
-                Back to dashboard
-              </Link>
-            </div>
-          )}
         </div>
       </div>
     </section>

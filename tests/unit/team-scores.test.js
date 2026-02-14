@@ -76,6 +76,17 @@ test(
 );
 
 test(
+  "Given TeamProfile component, when rendering lane, then it shows lane value with em-dash fallback",
+  () => {
+    const content = readFile("src/components/Portal/TeamProfile/TeamProfile.js");
+    assert.ok(
+      content.includes("Lane: {team.lane || \"—\"}"),
+      "TeamProfile must display team lane with em-dash fallback"
+    );
+  }
+);
+
+test(
   "Given ParticipantProfile component, when rendering scores, then it uses the shared ScoreCard component for all three event types",
   () => {
     const content = readFile("src/components/Portal/ParticipantProfile/ParticipantProfile.js");
@@ -144,6 +155,21 @@ test(
     assert.ok(
       content.includes("scores: teamScores"),
       "Team API must include scores on the team object as a single aggregate value"
+    );
+  }
+);
+
+test(
+  "Given team API, when building the response, then team lane is included on the team object",
+  () => {
+    const content = readFile("src/pages/api/portal/teams/[teamSlug].js");
+    assert.ok(
+      content.includes("s.lane as team_lane"),
+      "Team API must select lane from scores table for team event"
+    );
+    assert.ok(
+      content.includes("lane: teamLane"),
+      "Team API must include lane on the team response object"
     );
   }
 );
