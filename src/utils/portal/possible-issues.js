@@ -21,11 +21,8 @@ const parseParticipantList = (rawList) =>
 
 const shouldShowPossibleIssuesSection = ({
   totalParticipants = 0,
-  participantsWithLane = 0,
 } = {}) => {
-  if (totalParticipants <= 0) return false;
-  if (participantsWithLane <= 0) return false;
-  return participantsWithLane > totalParticipants / 2;
+  return totalParticipants > 0;
 };
 
 const buildPossibleIssuesFromRows = ({
@@ -186,6 +183,7 @@ const fetchPartnerTargetMultipleOwners = async (queryFn) => {
     from doubles_pairs dp
     left join people pp on pp.pid = dp.partner_pid
     left join people p on p.pid = dp.pid
+    where dp.partner_pid is not null
     group by dp.partner_pid, pp.first_name, pp.last_name
     having count(distinct dp.pid) > 1
     order by affected_count desc, pp.last_name, pp.first_name
@@ -229,7 +227,8 @@ const fetchNonReciprocalPartnerRows = async (queryFn) => {
       on rev.pid = dp.partner_pid and rev.partner_pid = dp.pid
     left join people p on p.pid = dp.pid
     left join people pp on pp.pid = dp.partner_pid
-    where rev.pid is null
+    where dp.partner_pid is not null
+      and rev.pid is null
     order by p.last_name, p.first_name
     `
   );
