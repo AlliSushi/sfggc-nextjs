@@ -4,6 +4,7 @@ create table if not exists admins (
   id char(36) primary key,
   email varchar(255) unique,
   name text,
+  pid varchar(64),
   first_name text,
   last_name text,
   phone varchar(64) unique,
@@ -70,6 +71,7 @@ create index if not exists idx_people_did on people(did);
 create index if not exists idx_doubles_pairs_pid on doubles_pairs(pid);
 create index if not exists idx_doubles_pairs_partner_pid on doubles_pairs(partner_pid);
 create index if not exists idx_scores_pid on scores(pid);
+create index if not exists idx_admins_pid on admins(pid);
 create index if not exists idx_admins_phone on admins(phone);
 
 create table if not exists audit_logs (

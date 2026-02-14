@@ -2,6 +2,7 @@ const { test, before, beforeEach, after } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const crypto = require("crypto");
 const { initTestDb } = require("../helpers/test-db");
 
 let db;
@@ -30,6 +31,8 @@ beforeEach(async () => {
 });
 
 after(async () => {
+  const { closePool } = await import(pathToFileURL(path.join(process.cwd(), "src/utils/portal/db.js")));
+  await closePool();
   if (!dbReady) return;
   await db.close();
 });
@@ -86,11 +89,11 @@ test("Given XML with doubles pairing, when importing twice, then data upserts", 
   const first = await importIgboXml(xml);
   const second = await importIgboXml(xml);
 
-  const { rows: peopleRows } = await db.pool.query("select pid from people");
-  const { rows: doublesRows } = await db.pool.query(
+  const [peopleRows] = await db.pool.query("select pid from people");
+  const [doublesRows] = await db.pool.query(
     "select pid, partner_pid, did from doubles_pairs order by pid"
   );
-  const { rows: didRows } = await db.pool.query(
+  const [didRows] = await db.pool.query(
     "select distinct did from doubles_pairs"
   );
 
@@ -114,26 +117,11 @@ test(
     const importIgboXml = await loadImporter();
     await db.pool.query(
       `
-      create table if not exists admins (
-        id char(36) primary key default (uuid()),
-        email text unique not null,
-        name text,
-        pid text,
-        first_name text,
-        last_name text,
-        phone text unique,
-        password_hash text,
-        role text not null default 'super-admin',
-        created_at timestamp default current_timestamp
-      )
-      `
-    );
-    await db.pool.query(
-      `
-      insert into admins (email, name, pid, first_name, last_name, phone, password_hash, role)
-      values (?,?,?,?,?,?,?,?)
+      insert into admins (id, email, name, pid, first_name, last_name, phone, password_hash, role)
+      values (?,?,?,?,?,?,?,?,?)
       `,
       [
+        crypto.randomUUID(),
         "old-email@example.com",
         "Old Name",
         "1001",
@@ -168,7 +156,7 @@ test(
 
     await importIgboXml(xml);
 
-    const { rows } = await db.pool.query(
+    const [rows] = await db.pool.query(
       "select email, first_name, last_name, phone from admins where pid = ?",
       ["1001"]
     );

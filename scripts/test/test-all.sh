@@ -8,6 +8,9 @@ status=0
 if ! run_test_command "frontend unit + route tests" node --test --test-concurrency=1 tests/unit/*.test.js tests/unit/migrations/*.test.js tests/unit/deployment/*.test.js tests/frontend/*.test.js; then
   status=$?
 fi
+if ! run_test_command "integration tests" node --test --test-concurrency=1 tests/integration/*.test.js; then
+  status=$?
+fi
 if ! run_test_command "backend tests" npm --prefix backend test; then
   status=$?
 fi

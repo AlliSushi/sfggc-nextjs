@@ -1,68 +1,24 @@
-const { test, before, beforeEach, after } = require("node:test");
+const { test, before } = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("crypto");
-const path = require("node:path");
-const { pathToFileURL } = require("node:url");
 const bcrypt = require("bcryptjs");
 const { createApiServer } = require("../helpers/api-server");
-const { initTestDb } = require("../helpers/test-db");
+const {
+  loadHandler,
+  loadSessionUtils,
+  parseCookie,
+  buildAdminCookie,
+  seedDefaultAdmin,
+  seedParticipant,
+  wrapHandlerWithQueryParam,
+  setupIntegrationDb,
+} = require("../helpers/integration-helpers");
 
 let db;
 let dbReady = false;
 let dbSkipReason = "";
 
-if (!process.env.ADMIN_SESSION_SECRET) {
-  process.env.ADMIN_SESSION_SECRET = "test-admin-session-secret";
-}
-
-const loadHandler = async (relativePath) => {
-  const fullPath = path.join(process.cwd(), relativePath);
-  const module = await import(pathToFileURL(fullPath));
-  return module.default;
-};
-
-const loadSessionUtils = async () => {
-  const fullPath = path.join(process.cwd(), "src/utils/portal/session.js");
-  const module = await import(pathToFileURL(fullPath));
-  return module;
-};
-
-const parseCookie = (cookieHeader) => cookieHeader?.split(";")[0] || "";
-
-const buildAdminCookie = async ({
-  email = "admin@example.com",
-  role = "super-admin",
-} = {}) => {
-  const { buildSessionToken, ADMIN_SESSION_TTL_MS } = await loadSessionUtils();
-  const token = buildSessionToken({ email, role }, ADMIN_SESSION_TTL_MS);
-  return `portal_admin=${token}`;
-};
-
-const seedParticipant = async ({ pid, firstName, lastName, email, teamId, did }) => {
-  await db.pool.query(
-    `
-    insert into people (
-      pid, first_name, last_name, email, phone, birth_month, birth_day,
-      city, region, country, tnmt_id, did, updated_at
-    )
-    values (?,?,?,?,?,?,?,?,?,?,?, ?, now())
-    `,
-    [
-      pid,
-      firstName,
-      lastName,
-      email,
-      "555-555-5555",
-      1,
-      1,
-      "San Francisco",
-      "CA",
-      "US",
-      teamId,
-      did,
-    ]
-  );
-};
+const dbState = setupIntegrationDb();
 
 const seedTeamMember = async ({
   pid,
@@ -104,24 +60,10 @@ const seedTeamMember = async ({
   );
 };
 
-before(async () => {
-  try {
-    db = await initTestDb();
-    dbReady = true;
-  } catch (error) {
-    dbReady = false;
-    dbSkipReason = error.message;
-  }
-});
-
-beforeEach(async () => {
-  if (!dbReady) return;
-  await db.reset();
-});
-
-after(async () => {
-  if (!dbReady) return;
-  await db.close();
+before(() => {
+  db = dbState.db;
+  dbReady = dbState.dbReady;
+  dbSkipReason = dbState.dbSkipReason;
 });
 
 test("Given participants exist, when searching, then results match query", async (t) => {
@@ -129,11 +71,12 @@ test("Given participants exist, when searching, then results match query", async
     t.skip(dbSkipReason || "Database not available");
     return;
   }
+  await seedDefaultAdmin(db.pool);
   await db.pool.query("insert into teams (tnmt_id, team_name) values (?,?)", [
     "2305",
     "Well, No Split!",
   ]);
-  await seedParticipant({
+  await seedParticipant(db.pool, {
     pid: "3336",
     firstName: "Robert",
     lastName: "Aldeguer",
@@ -141,7 +84,7 @@ test("Given participants exist, when searching, then results match query", async
     teamId: "2305",
     did: "1076",
   });
-  await seedParticipant({
+  await seedParticipant(db.pool, {
     pid: "1076",
     firstName: "Dan",
     lastName: "Fahy",
@@ -169,11 +112,12 @@ test("Given a participant with doubles pairing, when fetching details, then part
     t.skip(dbSkipReason || "Database not available");
     return;
   }
+  await seedDefaultAdmin(db.pool);
   await db.pool.query("insert into teams (tnmt_id, team_name) values (?,?)", [
     "2305",
     "Well, No Split!",
   ]);
-  await seedParticipant({
+  await seedParticipant(db.pool, {
     pid: "3336",
     firstName: "Robert",
     lastName: "Aldeguer",
@@ -181,7 +125,7 @@ test("Given a participant with doubles pairing, when fetching details, then part
     teamId: "2305",
     did: "1076",
   });
-  await seedParticipant({
+  await seedParticipant(db.pool, {
     pid: "1076",
     firstName: "Dan",
     lastName: "Fahy",
@@ -198,11 +142,11 @@ test("Given a participant with doubles pairing, when fetching details, then part
   );
 
   const handler = await loadHandler("src/pages/api/portal/participants/[pid].js");
-  const handlerWithPid = (req, res) => {
-    const match = req.url.match(/participants\/([^/?]+)/);
-    req.query = { ...(req.query || {}), pid: match?.[1] };
-    return handler(req, res);
-  };
+  const handlerWithPid = wrapHandlerWithQueryParam(
+    handler,
+    /participants\/([^/?]+)/,
+    "pid"
+  );
   const server = await createApiServer(handlerWithPid);
   const adminCookie = await buildAdminCookie();
   const response = await fetch(
@@ -359,6 +303,10 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await db.pool.query(
+      "insert into admins (id, email, name, role, password_hash) values (?,?,?,?,?)",
+      [crypto.randomUUID(), "ta@example.com", "TA", "tournament-admin", "not-a-real-hash"]
+    );
     const { buildSessionToken } = await loadSessionUtils();
     const token = buildSessionToken({ email: "ta@example.com", role: "tournament-admin" });
 
@@ -382,11 +330,12 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     await db.pool.query("insert into teams (tnmt_id, team_name) values (?,?)", [
       "2305",
       "Well, No Split!",
     ]);
-    await seedParticipant({
+    await seedParticipant(db.pool, {
       pid: "3336",
       firstName: "Robert",
       lastName: "Aldeguer",
@@ -459,6 +408,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     const { buildSessionToken } = await loadSessionUtils();
     const token = buildSessionToken({ email: "admin@example.com", role: "super-admin" });
 
@@ -481,7 +431,7 @@ test(
     const data = await response.json();
     await server.close();
 
-    const { rows } = await db.pool.query(
+    const [rows] = await db.pool.query(
       "select cast(count(*) as signed) as count from admin_password_resets"
     );
 
@@ -500,8 +450,8 @@ test(
     }
     const passwordHash = bcrypt.hashSync("test-password", 10);
     await db.pool.query(
-      "insert into admins (id, email, name, role, password_hash) values (?,?,?,?,?)",
-      [crypto.randomUUID(), "admin@example.com", "Admin", "tournament-admin", passwordHash]
+      "insert into admins (id, email, name, role, password_hash, must_change_password) values (?,?,?,?,?,?)",
+      [crypto.randomUUID(), "admin@example.com", "Admin", "tournament-admin", passwordHash, true]
     );
     await db.pool.query(
       `
@@ -631,6 +581,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     await db.pool.query(
       `
       insert into admin_actions (id, admin_email, action, details)
@@ -665,11 +616,12 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     await db.pool.query("insert into teams (tnmt_id, team_name) values (?,?)", [
       "2305",
       "Well, No Split!",
     ]);
-    await seedParticipant({
+    await seedParticipant(db.pool, {
       pid: "3336",
       firstName: "Robert",
       lastName: "Aldeguer",
@@ -698,7 +650,7 @@ test(
     });
     await server.close();
 
-    const { rows } = await db.pool.query(
+    const [rows] = await db.pool.query(
       "select cast(count(*) as signed) as count from audit_logs"
     );
 
@@ -735,11 +687,12 @@ test("Given participant updates, when saving, then audit entries are created", a
     t.skip(dbSkipReason || "Database not available");
     return;
   }
+  await seedDefaultAdmin(db.pool);
   await db.pool.query("insert into teams (tnmt_id, team_name) values (?,?)", [
     "2305",
     "Well, No Split!",
   ]);
-  await seedParticipant({
+  await seedParticipant(db.pool, {
     pid: "3336",
     firstName: "Robert",
     lastName: "Aldeguer",
@@ -747,7 +700,7 @@ test("Given participant updates, when saving, then audit entries are created", a
     teamId: "2305",
     did: "1076",
   });
-  await seedParticipant({
+  await seedParticipant(db.pool, {
     pid: "1076",
     firstName: "Dan",
     lastName: "Fahy",
@@ -757,11 +710,11 @@ test("Given participant updates, when saving, then audit entries are created", a
   });
 
   const handler = await loadHandler("src/pages/api/portal/participants/[pid].js");
-  const handlerWithPid = (req, res) => {
-    const match = req.url.match(/participants\/([^/?]+)/);
-    req.query = { ...(req.query || {}), pid: match?.[1] };
-    return handler(req, res);
-  };
+  const handlerWithPid = wrapHandlerWithQueryParam(
+    handler,
+    /participants\/([^/?]+)/,
+    "pid"
+  );
   const server = await createApiServer(handlerWithPid);
   const adminCookie = await buildAdminCookie();
   const patchResponse = await fetch(`${server.url}/api/portal/participants/3336`, {
@@ -793,11 +746,11 @@ test("Given participant updates, when saving, then audit entries are created", a
   const auditHandler = await loadHandler(
     "src/pages/api/portal/participants/[pid]/audit.js"
   );
-  const auditHandlerWithPid = (req, res) => {
-    const match = req.url.match(/participants\/([^/?]+)\/audit/);
-    req.query = { ...(req.query || {}), pid: match?.[1] };
-    return auditHandler(req, res);
-  };
+  const auditHandlerWithPid = wrapHandlerWithQueryParam(
+    auditHandler,
+    /participants\/([^/?]+)\/audit/,
+    "pid"
+  );
   const auditServer = await createApiServer(auditHandlerWithPid);
   const auditResponse = await fetch(
     `${auditServer.url}/api/portal/participants/3336/audit`,
@@ -820,11 +773,12 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     await db.pool.query("insert into teams (tnmt_id, team_name) values (?,?)", [
       "2305",
       "Well, No Split!",
     ]);
-    await seedParticipant({
+    await seedParticipant(db.pool, {
       pid: "3336",
       firstName: "Robert",
       lastName: "Aldeguer",
@@ -832,7 +786,7 @@ test(
       teamId: "2305",
       did: "1076",
     });
-    await seedParticipant({
+    await seedParticipant(db.pool, {
       pid: "1076",
       firstName: "Dan",
       lastName: "Fahy",
@@ -842,11 +796,11 @@ test(
     });
 
     const handler = await loadHandler("src/pages/api/portal/participants/[pid].js");
-    const handlerWithPid = (req, res) => {
-      const match = req.url.match(/participants\/([^/?]+)/);
-      req.query = { ...(req.query || {}), pid: match?.[1] };
-      return handler(req, res);
-    };
+    const handlerWithPid = wrapHandlerWithQueryParam(
+      handler,
+      /participants\/([^/?]+)/,
+      "pid"
+    );
     const server = await createApiServer(handlerWithPid);
     const adminCookie = await buildAdminCookie();
     const patchResponse = await fetch(`${server.url}/api/portal/participants/3336`, {
@@ -858,6 +812,7 @@ test(
       body: JSON.stringify({
         firstName: "Robert",
         lastName: "Aldeguer",
+        nickname: null,
         email: "robert@example.com",
         phone: "555-555-5555",
         birthMonth: 1,
@@ -865,6 +820,7 @@ test(
         city: "San Francisco",
         region: "CA",
         country: "US",
+        bookAverage: null,
         team: { tnmtId: "2305", name: "Well, No Split!" },
         doubles: { did: "1076", partnerPid: "1076" },
         lanes: { team: "", doubles: "", singles: "" },
@@ -878,11 +834,11 @@ test(
     const auditHandler = await loadHandler(
       "src/pages/api/portal/participants/[pid]/audit.js"
     );
-    const auditHandlerWithPid = (req, res) => {
-      const match = req.url.match(/participants\/([^/?]+)\/audit/);
-      req.query = { ...(req.query || {}), pid: match?.[1] };
-      return auditHandler(req, res);
-    };
+    const auditHandlerWithPid = wrapHandlerWithQueryParam(
+      auditHandler,
+      /participants\/([^/?]+)\/audit/,
+      "pid"
+    );
     const auditServer = await createApiServer(auditHandlerWithPid);
     const auditResponse = await fetch(
       `${auditServer.url}/api/portal/participants/3336/audit`,
@@ -910,7 +866,7 @@ test(
       "2305",
       "Well, No Split!",
     ]);
-    await seedParticipant({
+    await seedParticipant(db.pool, {
       pid: "3336",
       firstName: "Robert",
       lastName: "Aldeguer",
@@ -921,18 +877,23 @@ test(
 
     const loginHandler = await loadHandler("src/pages/api/portal/participant/login.js");
     const loginServer = await createApiServer(loginHandler);
-    const loginResponse = await fetch(`${loginServer.url}/api/portal/participant/login`, {
+    await fetch(`${loginServer.url}/api/portal/participant/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "robert@example.com" }),
     });
-    const loginData = await loginResponse.json();
     await loginServer.close();
+
+    const [tokenRows] = await db.pool.query(
+      "select token from participant_login_tokens where pid = ? order by created_at desc limit 1",
+      ["3336"]
+    );
+    const loginToken = tokenRows[0].token;
 
     const verifyHandler = await loadHandler("src/pages/api/portal/participant/verify.js");
     const verifyServer = await createApiServer(verifyHandler);
     const verifyResponse = await fetch(
-      `${verifyServer.url}/api/portal/participant/verify?token=${loginData.token}`,
+      `${verifyServer.url}/api/portal/participant/verify?token=${loginToken}`,
       { redirect: "manual" }
     );
     const verifyCookie = parseCookie(verifyResponse.headers.get("set-cookie"));
@@ -952,7 +913,7 @@ test(
 );
 
 test(
-  "Given a participant login payload with email or phone, when requesting a link, then a token is returned",
+  "Given a participant email, when requesting a login link, then ok is returned without token for non-admin callers",
   async (t) => {
     if (!dbReady) {
       t.skip(dbSkipReason || "Database not available");
@@ -962,7 +923,7 @@ test(
       "2305",
       "Well, No Split!",
     ]);
-    await seedParticipant({
+    await seedParticipant(db.pool, {
       pid: "3336",
       firstName: "Robert",
       lastName: "Aldeguer",
@@ -980,20 +941,11 @@ test(
       body: JSON.stringify({ email: "robert@example.com" }),
     });
     const emailData = await emailResponse.json();
-
-    const phoneResponse = await fetch(`${server.url}/api/portal/participant/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: "555-555-5555" }),
-    });
-    const phoneData = await phoneResponse.json();
-
     await server.close();
 
     assert.equal(emailResponse.status, 200);
-    assert.ok(emailData.token);
-    assert.equal(phoneResponse.status, 200);
-    assert.ok(phoneData.token);
+    assert.equal(emailData.ok, true);
+    assert.equal(emailData.token, undefined, "Token must not be exposed to non-admin callers");
   }
 );
 
@@ -1008,7 +960,7 @@ test(
       "2305",
       "Well, No Split!",
     ]);
-    await seedParticipant({
+    await seedParticipant(db.pool, {
       pid: "3336",
       firstName: "Robert",
       lastName: "Aldeguer",
@@ -1047,6 +999,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     await db.pool.query(
       "insert into teams (tnmt_id, team_name, slug) values (?,?,?)",
       ["2305", "Well, No Split!", "well-no-split"]
@@ -1113,11 +1066,11 @@ test(
     );
 
     const handler = await loadHandler("src/pages/api/portal/teams/[teamSlug].js");
-    const handlerWithSlug = (req, res) => {
-      const match = req.url.match(/teams\/([^/?]+)/);
-      req.query = { ...(req.query || {}), teamSlug: match?.[1] };
-      return handler(req, res);
-    };
+    const handlerWithSlug = wrapHandlerWithQueryParam(
+      handler,
+      /teams\/([^/?]+)/,
+      "teamSlug"
+    );
     const server = await createApiServer(handlerWithSlug);
     const adminCookie = await buildAdminCookie();
     const response = await fetch(`${server.url}/api/portal/teams/well-no-split`, {
@@ -1143,6 +1096,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     await db.pool.query("insert into teams (tnmt_id, team_name) values (?,?)", [
       "2501",
       "Fallback Squad",
@@ -1159,11 +1113,11 @@ test(
     });
 
     const handler = await loadHandler("src/pages/api/portal/teams/[teamSlug].js");
-    const handlerWithSlug = (req, res) => {
-      const match = req.url.match(/teams\/([^/?]+)/);
-      req.query = { ...(req.query || {}), teamSlug: match?.[1] };
-      return handler(req, res);
-    };
+    const handlerWithSlug = wrapHandlerWithQueryParam(
+      handler,
+      /teams\/([^/?]+)/,
+      "teamSlug"
+    );
     const server = await createApiServer(handlerWithSlug);
     const adminCookie = await buildAdminCookie();
     const response = await fetch(`${server.url}/api/portal/teams/fallback-squad`, {
@@ -1185,6 +1139,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     await db.pool.query(
       "insert into teams (tnmt_id, team_name, slug) values (?,?,?)",
       ["2401", "Late Splitters", "late-splitters"]
@@ -1221,11 +1176,11 @@ test(
     });
 
     const handler = await loadHandler("src/pages/api/portal/teams/[teamSlug].js");
-    const handlerWithSlug = (req, res) => {
-      const match = req.url.match(/teams\/([^/?]+)/);
-      req.query = { ...(req.query || {}), teamSlug: match?.[1] };
-      return handler(req, res);
-    };
+    const handlerWithSlug = wrapHandlerWithQueryParam(
+      handler,
+      /teams\/([^/?]+)/,
+      "teamSlug"
+    );
     const server = await createApiServer(handlerWithSlug);
     const adminCookie = await buildAdminCookie();
     const response = await fetch(`${server.url}/api/portal/teams/late-splitters`, {
@@ -1249,6 +1204,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     await db.pool.query(
       "insert into teams (tnmt_id, team_name, slug) values (?,?,?)",
       ["2601", "Location Squad", "location-squad"]
@@ -1278,11 +1234,11 @@ test(
     });
 
     const handler = await loadHandler("src/pages/api/portal/teams/[teamSlug].js");
-    const handlerWithSlug = (req, res) => {
-      const match = req.url.match(/teams\/([^/?]+)/);
-      req.query = { ...(req.query || {}), teamSlug: match?.[1] };
-      return handler(req, res);
-    };
+    const handlerWithSlug = wrapHandlerWithQueryParam(
+      handler,
+      /teams\/([^/?]+)/,
+      "teamSlug"
+    );
     const server = await createApiServer(handlerWithSlug);
     const adminCookie = await buildAdminCookie();
     const response = await fetch(`${server.url}/api/portal/teams/location-squad`, {
@@ -1307,6 +1263,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     const adminCookie = await buildAdminCookie();
     const uniqueEmail = `emailonly-${crypto.randomUUID()}@example.com`;
 
@@ -1332,7 +1289,7 @@ test(
     assert.equal(response.status, 200);
     assert.equal(data.ok, true);
 
-    const { rows } = await db.pool.query(
+    const [rows] = await db.pool.query(
       "select email, phone from admins where email = ?",
       [uniqueEmail]
     );
@@ -1349,6 +1306,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     const adminCookie = await buildAdminCookie();
     const uniquePhone = `555-${crypto.randomUUID().slice(0, 8)}`;
 
@@ -1374,7 +1332,7 @@ test(
     assert.equal(response.status, 200);
     assert.equal(data.ok, true);
 
-    const { rows } = await db.pool.query(
+    const [rows] = await db.pool.query(
       "select email, phone from admins where phone = ?",
       [uniquePhone]
     );
@@ -1391,6 +1349,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     const adminCookie = await buildAdminCookie();
 
     const handler = await loadHandler("src/pages/api/portal/admins/index.js");
@@ -1426,6 +1385,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     const adminCookie = await buildAdminCookie();
 
     const handler = await loadHandler("src/pages/api/portal/admins/index.js");
@@ -1461,6 +1421,7 @@ test(
       t.skip(dbSkipReason || "Database not available");
       return;
     }
+    await seedDefaultAdmin(db.pool);
     const adminCookie = await buildAdminCookie();
     const duplicateEmail = `dup-${crypto.randomUUID()}@example.com`;
     const adminBody = {
