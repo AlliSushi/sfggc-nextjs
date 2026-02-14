@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import RootLayout from "../../../components/layout/layout";
 import PortalShell from "../../../components/Portal/PortalShell/PortalShell";
 import AdminMenu from "../../../components/Portal/AdminMenu/AdminMenu";
+import PossibleIssuesCard from "../../../components/Portal/PossibleIssuesCard/PossibleIssuesCard";
 import { toTeamSlug } from "../../../utils/portal/slug.js";
 import { portalFetch } from "../../../utils/portal/portal-fetch.js";
 import {
@@ -12,6 +13,12 @@ import {
   verifyToken,
 } from "../../../utils/portal/session.js";
 
+const DEFAULT_POSSIBLE_ISSUES_STATE = {
+  showSection: false,
+  coverage: null,
+  issues: [],
+};
+
 const AdminDashboardPage = () => {
   const router = useRouter();
   const [participants, setParticipants] = useState([]);
@@ -19,6 +26,7 @@ const AdminDashboardPage = () => {
   const [error, setError] = useState("");
   const [authChecked, setAuthChecked] = useState(false);
   const [adminRole, setAdminRole] = useState("");
+  const [possibleIssues, setPossibleIssues] = useState(DEFAULT_POSSIBLE_ISSUES_STATE);
 
   const verifySession = useCallback(async () => {
     const response = await fetch("/api/portal/admin/session");
@@ -64,9 +72,31 @@ const AdminDashboardPage = () => {
     [verifySession]
   );
 
+  const loadPossibleIssues = useCallback(async () => {
+    try {
+      const response = await portalFetch("/api/portal/admin/possible-issues");
+      const data = await response.json();
+      if (response.ok) {
+        setPossibleIssues({
+          showSection: !!data?.showSection,
+          coverage: data?.coverage || null,
+          issues: Array.isArray(data?.issues) ? data.issues : [],
+        });
+      }
+    } catch (err) {
+      // Keep this section non-blocking so participant dashboard data remains available.
+      setPossibleIssues(DEFAULT_POSSIBLE_ISSUES_STATE);
+    }
+  }, []);
+
   useEffect(() => {
     loadParticipants(query);
   }, [loadParticipants, query]);
+
+  useEffect(() => {
+    if (!authChecked) return;
+    loadPossibleIssues();
+  }, [authChecked, loadPossibleIssues]);
 
   const filtered = useMemo(() => {
     if (!query) {
@@ -110,6 +140,7 @@ const AdminDashboardPage = () => {
 
         {error && <div className="alert alert-danger">{error}</div>}
         {!authChecked && <div className="text-muted">Checking session...</div>}
+        {authChecked && <PossibleIssuesCard possibleIssues={possibleIssues} />}
         {authChecked && (
           <div className="table-responsive">
           <table className="table table-striped align-middle">
