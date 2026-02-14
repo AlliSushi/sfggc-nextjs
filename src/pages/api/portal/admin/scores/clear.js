@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     req,
     res,
     clearWithQuery: async (connQuery) => {
-      await connQuery("delete from scores");
+      await connQuery("update scores set game1 = null, game2 = null, game3 = null");
     },
     action: "clear_scores",
     details: { scope: "all" },

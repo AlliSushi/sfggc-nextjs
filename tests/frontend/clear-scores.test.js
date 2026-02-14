@@ -49,12 +49,16 @@ test(
 );
 
 test(
-  "Given clear-scores API route, when read, then deletes from scores table",
+  "Given clear-scores API route, when read, then nulls game columns instead of deleting rows",
   () => {
     const content = readRoute();
     assert.ok(
-      content.toLowerCase().includes("delete from scores"),
-      "Must delete all rows from scores table"
+      content.toLowerCase().includes("update scores"),
+      "Must UPDATE scores (not DELETE) to preserve entering_avg and handicap"
+    );
+    assert.ok(
+      !content.toLowerCase().includes("delete from scores"),
+      "Must NOT use DELETE FROM scores — that destroys entering_avg and handicap data"
     );
   }
 );
