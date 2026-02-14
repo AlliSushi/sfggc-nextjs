@@ -13,6 +13,7 @@ const AuditPage = ({ adminEmail, adminRole }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showClearModal, setShowClearModal] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const searchParams = useMemo(() => {
     const params = new URLSearchParams();
@@ -37,7 +38,7 @@ const AuditPage = ({ adminEmail, adminRole }) => {
         setError("Unable to load audit log.");
       })
       .finally(() => setLoading(false));
-  }, [searchParams]);
+  }, [searchParams, refreshKey]);
 
   const clearLogs = async () => {
     setError("");
@@ -47,8 +48,8 @@ const AuditPage = ({ adminEmail, adminRole }) => {
         setError("Unable to clear the audit log.");
         return;
       }
-      setRows([]);
       setShowClearModal(false);
+      setRefreshKey((value) => value + 1);
     } catch (err) {
       setError("Unable to clear the audit log.");
     }
@@ -74,7 +75,7 @@ const AuditPage = ({ adminEmail, adminRole }) => {
               placeholder="Participant, team, or admin email"
             />
           </div>
-          <div className="col-12 col-md-3">
+          <div className="col-12 col-md-2">
             <label className="form-label" htmlFor="audit-sort">
               Sort by date
             </label>
@@ -88,7 +89,16 @@ const AuditPage = ({ adminEmail, adminRole }) => {
               <option value="asc">Oldest first</option>
             </select>
           </div>
-          <div className="col-12 col-md-3 text-md-end">
+          <div className="col-12 col-md-2 d-flex align-items-end">
+            <button
+              className="btn btn-outline-danger w-100"
+              type="button"
+              onClick={() => setShowClearModal(true)}
+            >
+              Clear Log
+            </button>
+          </div>
+          <div className="col-12 col-md-2 text-md-end">
             <AdminMenu adminRole={adminRole} />
           </div>
         </div>
@@ -145,15 +155,6 @@ const AuditPage = ({ adminEmail, adminRole }) => {
           </div>
         )}
 
-        <div className="mt-3">
-          <button
-            className="btn btn-outline-danger btn-sm"
-            type="button"
-            onClick={() => setShowClearModal(true)}
-          >
-            Clear Log
-          </button>
-        </div>
         {showClearModal && (
           <PortalModal
             title="Clear audit log"

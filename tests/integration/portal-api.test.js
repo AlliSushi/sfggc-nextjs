@@ -636,6 +636,13 @@ test(
       `,
       [crypto.randomUUID(), "admin@example.com", "3336", "email", "old@example.com", "new@example.com"]
     );
+    await db.pool.query(
+      `
+      insert into admin_actions (id, admin_email, action, details)
+      values (?,?,?,?)
+      `,
+      [crypto.randomUUID(), "admin@example.com", "import_xml", "{\"people\":1}"]
+    );
 
     const { buildSessionToken } = await loadSessionUtils();
     const token = buildSessionToken({ email: "admin@example.com", role: "super-admin" });
@@ -650,12 +657,89 @@ test(
     });
     await server.close();
 
-    const [rows] = await db.pool.query(
+    const [auditRows] = await db.pool.query(
       "select cast(count(*) as signed) as count from audit_logs"
+    );
+    const [adminActionRows] = await db.pool.query(
+      "select admin_email, action from admin_actions order by created_at desc"
     );
 
     assert.equal(response.status, 200);
-    assert.equal(rows[0].count, 0);
+    assert.equal(auditRows[0].count, 0);
+    assert.equal(adminActionRows.length, 1);
+    assert.equal(adminActionRows[0].action, "clear_audit_log");
+    assert.equal(adminActionRows[0].admin_email, "admin@example.com");
+  }
+);
+
+test(
+  "Given a cleared audit log, when loading a participant audit feed, then the first entry shows the admin who cleared logs",
+  async (t) => {
+    if (!dbReady) {
+      t.skip(dbSkipReason || "Database not available");
+      return;
+    }
+    await seedDefaultAdmin(db.pool);
+    await db.pool.query("insert into teams (tnmt_id, team_name) values (?,?)", [
+      "2305",
+      "Well, No Split!",
+    ]);
+    await seedParticipant(db.pool, {
+      pid: "3336",
+      firstName: "Robert",
+      lastName: "Aldeguer",
+      email: "robert@example.com",
+      teamId: "2305",
+      did: "1076",
+    });
+
+    await db.pool.query(
+      `
+      insert into audit_logs (id, admin_email, pid, field, old_value, new_value)
+      values (?,?,?,?,?,?)
+      `,
+      [crypto.randomUUID(), "admin@example.com", "3336", "email", "old@example.com", "new@example.com"]
+    );
+
+    const { buildSessionToken } = await loadSessionUtils();
+    const token = buildSessionToken({ email: "admin@example.com", role: "super-admin" });
+
+    const clearHandler = await loadHandler("src/pages/api/portal/admin/audit/clear.js");
+    const clearServer = await createApiServer(clearHandler);
+    const clearResponse = await fetch(`${clearServer.url}/api/portal/admin/audit/clear`, {
+      method: "POST",
+      headers: {
+        cookie: `portal_admin=${token}`,
+      },
+    });
+    await clearServer.close();
+    assert.equal(clearResponse.status, 200);
+
+    const participantAuditHandler = await loadHandler(
+      "src/pages/api/portal/participants/[pid]/audit.js"
+    );
+    const participantAuditHandlerWithPid = wrapHandlerWithQueryParam(
+      participantAuditHandler,
+      /participants\/([^/?]+)\/audit/,
+      "pid"
+    );
+    const participantAuditServer = await createApiServer(participantAuditHandlerWithPid);
+    const participantAuditResponse = await fetch(
+      `${participantAuditServer.url}/api/portal/participants/3336/audit`,
+      {
+        headers: {
+          cookie: `portal_admin=${token}`,
+        },
+      }
+    );
+    const participantAuditData = await participantAuditResponse.json();
+    await participantAuditServer.close();
+
+    assert.equal(participantAuditResponse.status, 200);
+    assert.ok(Array.isArray(participantAuditData));
+    assert.equal(participantAuditData.length, 1);
+    assert.equal(participantAuditData[0].field, "clear_audit_log");
+    assert.equal(participantAuditData[0].admin_email, "admin@example.com");
   }
 );
 
