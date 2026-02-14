@@ -32,3 +32,10 @@ export const EVENT_LABELS = {
   [EVENT_TYPES.DOUBLES]: 'Doubles',
   [EVENT_TYPES.SINGLES]: 'Singles',
 };
+
+/**
+ * Resolve a query param value to a valid event type.
+ * Returns EVENT_TYPES.TEAM as default for invalid/missing values.
+ */
+export const resolveInitialEvent = (value) =>
+  EVENT_TYPE_LIST.includes(value) ? value : EVENT_TYPES.TEAM;

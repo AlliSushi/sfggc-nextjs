@@ -8,8 +8,8 @@ import {
   validateColumns,
   matchParticipants,
   importLanes,
-  wouldClobberExisting,
 } from "../../src/utils/portal/importLanesCsv.js";
+import { wouldClobberExisting } from "../../src/utils/portal/import-csv-helpers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

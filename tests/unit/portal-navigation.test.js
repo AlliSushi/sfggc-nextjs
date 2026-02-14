@@ -7,7 +7,8 @@ import {
   resolveLaneEntryHref,
 } from "../../src/utils/portal/navigation.js";
 import { toTeamSlug } from "../../src/utils/portal/slug.js";
-import { EM_DASH } from "../../src/utils/portal/lane-assignments.js";
+import { EM_DASH } from "../../src/utils/portal/display-constants.js";
+import { resolveInitialEvent, EVENT_TYPES } from "../../src/utils/portal/event-constants.js";
 
 describe("portal navigation helpers", () => {
   it("Given a safe internal from path, when resolving back href, then it returns the from path", () => {
@@ -55,5 +56,57 @@ describe("portal navigation helpers", () => {
   it("Given a placeholder lane entry, when resolving lane assignment destination, then it returns an empty href", () => {
     const destination = resolveLaneEntryHref({ label: EM_DASH }, "/portal/admin/lane-assignments");
     assert.equal(destination, "");
+  });
+
+  // Score standings navigation flow
+  it("Given a team page path, when building View Standings URL, then scores URL includes from param", () => {
+    const result = appendFromParam("/portal/scores", "/portal/team/tl-strong");
+    assert.equal(result, "/portal/scores?from=%2Fportal%2Fteam%2Ftl-strong");
+  });
+
+  it("Given a participant page path, when building View Standings URL, then scores URL includes from param", () => {
+    const result = appendFromParam("/portal/scores", "/portal/participant/P123");
+    assert.equal(result, "/portal/scores?from=%2Fportal%2Fparticipant%2FP123");
+  });
+
+  it("Given a team page from param on scores page, when resolving back href, then returns team page", () => {
+    const result = resolveBackHref("/portal/team/tl-strong", "/portal/");
+    assert.equal(result, "/portal/team/tl-strong");
+  });
+
+  it("Given no from param on scores page, when resolving back href with portal fallback, then returns portal home", () => {
+    const result = resolveBackHref("", "/portal/");
+    assert.equal(result, "/portal/");
+  });
+
+  it("Given undefined from param on scores page, when resolving back href, then returns portal fallback", () => {
+    const result = resolveBackHref(undefined, "/portal/");
+    assert.equal(result, "/portal/");
+  });
+});
+
+describe("resolveInitialEvent", () => {
+  it("Given 'team' query param, when resolving initial event, then returns EVENT_TYPES.TEAM", () => {
+    assert.equal(resolveInitialEvent("team"), EVENT_TYPES.TEAM);
+  });
+
+  it("Given 'doubles' query param, when resolving initial event, then returns EVENT_TYPES.DOUBLES", () => {
+    assert.equal(resolveInitialEvent("doubles"), EVENT_TYPES.DOUBLES);
+  });
+
+  it("Given 'singles' query param, when resolving initial event, then returns EVENT_TYPES.SINGLES", () => {
+    assert.equal(resolveInitialEvent("singles"), EVENT_TYPES.SINGLES);
+  });
+
+  it("Given invalid query param, when resolving initial event, then returns EVENT_TYPES.TEAM as default", () => {
+    assert.equal(resolveInitialEvent("invalid"), EVENT_TYPES.TEAM);
+  });
+
+  it("Given undefined query param, when resolving initial event, then returns EVENT_TYPES.TEAM as default", () => {
+    assert.equal(resolveInitialEvent(undefined), EVENT_TYPES.TEAM);
+  });
+
+  it("Given null query param, when resolving initial event, then returns EVENT_TYPES.TEAM as default", () => {
+    assert.equal(resolveInitialEvent(null), EVENT_TYPES.TEAM);
   });
 });

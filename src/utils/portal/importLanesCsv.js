@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { EVENT_TYPES } from "./event-constants.js";
 import { writeAuditEntries } from "./audit.js";
+import { validateRequiredColumns, wouldClobberExisting } from "./import-csv-helpers.js";
 
 const REQUIRED_COLUMNS = ["PID", "T_Lane", "D_Lane", "S_Lane"];
 
@@ -11,10 +12,7 @@ const normalizeLaneValue = (value) => {
   return trimmed;
 };
 
-const validateColumns = (headers) => {
-  const missing = REQUIRED_COLUMNS.filter((col) => !headers.includes(col));
-  return { valid: missing.length === 0, missing };
-};
+const validateColumns = (headers) => validateRequiredColumns(headers, REQUIRED_COLUMNS);
 
 const buildUnmatchedRow = (row, pid, reason) => ({
   pid,
@@ -83,7 +81,7 @@ const matchParticipants = async (rows, query) => {
   return { matched, unmatched };
 };
 
-const EVENT_LANE_FIELDS = {
+const LANE_AUDIT_FIELDS = {
   [EVENT_TYPES.TEAM]: "lane_team",
   [EVENT_TYPES.DOUBLES]: "lane_doubles",
   [EVENT_TYPES.SINGLES]: "lane_singles",
@@ -112,13 +110,9 @@ const getCurrentLanesMap = async (participants, query) => {
   return lanesByPid;
 };
 
-/** Null import value should not overwrite an existing database value. */
-const wouldClobberExisting = (newValue, oldValue) =>
-  newValue === null && oldValue !== null;
-
 const computeLaneChanges = (newLanes, currentLanes) => {
   const changes = [];
-  for (const [eventType, auditField] of Object.entries(EVENT_LANE_FIELDS)) {
+  for (const [eventType, auditField] of Object.entries(LANE_AUDIT_FIELDS)) {
     const newLane = newLanes[eventType] ?? null;
     const oldLane = currentLanes[eventType] ?? null;
     if (wouldClobberExisting(newLane, oldLane)) continue;
@@ -171,4 +165,4 @@ const importLanes = async (matched, adminEmail, query) => {
   return { updated, skipped };
 };
 
-export { normalizeLaneValue, validateColumns, matchParticipants, importLanes, wouldClobberExisting, REQUIRED_COLUMNS };
+export { normalizeLaneValue, validateColumns, matchParticipants, importLanes, REQUIRED_COLUMNS };

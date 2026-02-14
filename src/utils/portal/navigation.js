@@ -1,5 +1,5 @@
 import { toTeamSlug } from "./slug.js";
-import { EM_DASH } from "./lane-assignments.js";
+import { EM_DASH } from "./display-constants.js";
 
 const normalizeQueryValue = (value) => {
   if (Array.isArray(value)) {

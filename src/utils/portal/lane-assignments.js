@@ -1,8 +1,7 @@
 import { EVENT_TYPES } from "./event-constants.js";
 import { buildDisplayName } from "./name-helpers.js";
 import { toTeamSlug } from "./slug.js";
-
-const EM_DASH = "\u2014";
+import { EM_DASH } from "./display-constants.js";
 
 const parseLaneNumber = (lane) => {
   const normalized = String(lane || "").trim();
