@@ -16,7 +16,7 @@ const ScrMstWinners = () => {
 
       <div className={`${styles.Intro}`}>
         <p className={``}>
-          Gallery of Winners
+          Gallery of Winners 2025
         </p>
       </div>
 
@@ -96,3 +96,4 @@ const ScrMstWinners = () => {
 }
 
 export default ScrMstWinners;
+
