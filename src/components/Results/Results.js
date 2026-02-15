@@ -13,7 +13,7 @@ const Results = () => {
       //{ id: 'golden_mystery_doubles', name: 'Golden Mystery Doubles' },
       //{ id: 'valentine_3somes', name: 'Valentine 3somes' },
       //{ id: 'optional_scratch', name: 'Optional Scratch' },
-      { id: 'sm_qualifier_inprogress', name: 'Scratch Masters Qualifiers In Progress' },
+      { id: 'sm_qualifier_final', name: 'Scratch Masters Qualifiers Final' },
     ],
   ];
 
