@@ -13,6 +13,7 @@ echo "  Ubuntu: scripts/dev/install-mariadb-ubuntu.sh"
 
 echo "Initialize the portal database schema:"
 echo "  bash scripts/dev/init-portal-db.sh"
+echo "  (This now also runs all scripts in backend/scripts/migrations/)"
 
 echo "Import registration XML (optional):"
 echo "  bash scripts/dev/import-igbo-xml.sh /tmp/igbo.xml"

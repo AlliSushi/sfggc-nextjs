@@ -35,6 +35,12 @@ create table if not exists people (
   country text,
   tnmt_id varchar(64) references teams(tnmt_id),
   did varchar(64),
+  division varchar(1),
+  scratch_masters tinyint(1) not null default 0,
+  optional_events tinyint(1) not null default 0,
+  optional_best_3_of_9 tinyint(1) not null default 0,
+  optional_scratch tinyint(1) not null default 0,
+  optional_all_events_hdcp tinyint(1) not null default 0,
   team_captain boolean default false,
   team_order int,
   created_at timestamp default current_timestamp,
@@ -122,5 +128,11 @@ create table if not exists email_templates (
   use_html_override boolean default false,
   available_variables text,
   created_at timestamp default current_timestamp,
+  updated_at timestamp default current_timestamp on update current_timestamp
+);
+
+create table if not exists portal_settings (
+  setting_key varchar(128) primary key,
+  setting_value text not null,
   updated_at timestamp default current_timestamp on update current_timestamp
 );
