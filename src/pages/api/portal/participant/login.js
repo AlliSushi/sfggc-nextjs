@@ -44,13 +44,13 @@ export default async function handler(req, res) {
     }
 
     const token = buildToken();
-    const expiresAt = new Date(Date.now() + PARTICIPANT_LINK_TTL_MS);
+    const ttlSeconds = Math.floor(PARTICIPANT_LINK_TTL_MS / 1000);
     await query(
       `
       insert into participant_login_tokens (token, pid, expires_at)
-      values (?,?,?)
+      values (?, ?, date_add(now(), interval ? second))
       `,
-      [token, rows[0].pid, expiresAt]
+      [token, rows[0].pid, ttlSeconds]
     );
 
     await sendLoginEmail({ email: normalized, token });

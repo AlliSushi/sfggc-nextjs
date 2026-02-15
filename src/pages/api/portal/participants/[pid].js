@@ -1,6 +1,9 @@
 import { writeAuditEntries } from "../../../../utils/portal/audit.js";
 import { withTransaction } from "../../../../utils/portal/db.js";
-import { requireParticipantMatchOrAdmin } from "../../../../utils/portal/auth-guards.js";
+import {
+  requireAnySession,
+  requireParticipantMatchOrAdmin,
+} from "../../../../utils/portal/auth-guards.js";
 import { methodNotAllowed } from "../../../../utils/portal/http.js";
 import {
   formatParticipant,
@@ -20,7 +23,7 @@ const resolveAdminEmail = (sessions) =>
   "admin@local";
 
 const handleGet = async (req, res, pid) => {
-  const sessions = await requireParticipantMatchOrAdmin(req, res, pid);
+  const sessions = await requireAnySession(req, res);
   if (!sessions) return;
 
   const participant = await formatParticipant(pid);

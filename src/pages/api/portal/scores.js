@@ -1,8 +1,9 @@
 import { query } from "../../../utils/portal/db.js";
-import { getAuthSessions } from "../../../utils/portal/auth-guards.js";
-import { methodNotAllowed, unauthorized } from "../../../utils/portal/http.js";
+import { methodNotAllowed, forbidden, internalServerError } from "../../../utils/portal/http.js";
 import { EVENT_TYPES } from "../../../utils/portal/event-constants.js";
 import { buildScoreStandings } from "../../../utils/portal/score-standings.js";
+import { requireAnySession } from "../../../utils/portal/auth-guards.js";
+import { getScoresVisibleToParticipants } from "../../../utils/portal/portal-settings-db.js";
 
 const fetchTeamRows = async () => {
   const { rows } = await query(
@@ -23,13 +24,13 @@ const fetchTeamRows = async () => {
 const fetchDoublesRows = async () => {
   const { rows } = await query(
     `
-    select dp.did,
+    select least(dp.pid, coalesce(dp.partner_pid, dp.pid)) as did,
            p.pid, p.first_name, p.last_name, p.nickname,
            s.game1, s.game2, s.game3, s.handicap
     from doubles_pairs dp
-    join people p on p.did = dp.did
+    join people p on p.pid = dp.pid
     left join scores s on s.pid = p.pid and s.event_type = ?
-    order by dp.did
+    order by did
     `,
     [EVENT_TYPES.DOUBLES]
   );
@@ -57,10 +58,18 @@ export default async function handler(req, res) {
       return;
     }
 
-    const { hasSession } = getAuthSessions(req);
-    if (!hasSession) {
-      unauthorized(res);
+    const auth = await requireAnySession(req, res);
+    if (!auth) {
       return;
+    }
+
+    const isAdmin = Boolean(auth.adminSession);
+    if (!isAdmin) {
+      const participantsCanViewScores = await getScoresVisibleToParticipants();
+      if (!participantsCanViewScores) {
+        forbidden(res);
+        return;
+      }
     }
 
     const [teamRows, doublesRows, singlesRows] = await Promise.all([
@@ -72,6 +81,6 @@ export default async function handler(req, res) {
     const standings = buildScoreStandings({ teamRows, doublesRows, singlesRows });
     res.status(200).json(standings);
   } catch (error) {
-    res.status(500).json({ error: error.message || "Unexpected error." });
+    internalServerError(res, error);
   }
 }

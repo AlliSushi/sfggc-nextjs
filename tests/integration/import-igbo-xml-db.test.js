@@ -167,3 +167,56 @@ test(
     assert.equal(rows[0].phone, "555-111-2222");
   }
 );
+
+test(
+  "Given a participant entering average, when importing XML repeatedly with changed average, then division is recalculated and updated",
+  async (t) => {
+    if (!dbReady) {
+      t.skip(dbSkipReason || "Database not available");
+      return;
+    }
+    const importIgboXml = await loadImporter();
+
+    const xmlFirst = `
+      <IGBOTS>
+        <PEOPLES>
+          <PEOPLE>
+            <ID>2001</ID>
+            <LAST_NAME>Bowler</LAST_NAME>
+            <FIRST_NAME>Pat</FIRST_NAME>
+            <EMAIL>pat@example.com</EMAIL>
+            <BOOK_AVERAGE>189</BOOK_AVERAGE>
+          </PEOPLE>
+        </PEOPLES>
+      </IGBOTS>
+    `;
+
+    const xmlSecond = `
+      <IGBOTS>
+        <PEOPLES>
+          <PEOPLE>
+            <ID>2001</ID>
+            <LAST_NAME>Bowler</LAST_NAME>
+            <FIRST_NAME>Pat</FIRST_NAME>
+            <EMAIL>pat@example.com</EMAIL>
+            <BOOK_AVERAGE>208</BOOK_AVERAGE>
+          </PEOPLE>
+        </PEOPLES>
+      </IGBOTS>
+    `;
+
+    await importIgboXml(xmlFirst);
+    let [rows] = await db.pool.query(
+      "select division from people where pid = ?",
+      ["2001"]
+    );
+    assert.equal(rows[0].division, "C");
+
+    await importIgboXml(xmlSecond);
+    [rows] = await db.pool.query(
+      "select division from people where pid = ?",
+      ["2001"]
+    );
+    assert.equal(rows[0].division, "A");
+  }
+);

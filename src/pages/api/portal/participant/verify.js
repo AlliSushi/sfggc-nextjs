@@ -28,12 +28,14 @@ export default async function handler(req, res) {
       select token, pid, expires_at, used_at
       from participant_login_tokens
       where token = ?
+        and used_at is null
+        and expires_at > now()
       limit 1
       `,
       [token]
     );
     const record = rows[0];
-    if (!record || record.used_at || new Date(record.expires_at) < new Date()) {
+    if (!record) {
       res.writeHead(302, { Location: "/portal/participant?expired=1" });
       res.end();
       return;

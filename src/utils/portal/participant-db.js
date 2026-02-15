@@ -6,40 +6,6 @@ import { calculateHandicap } from "./handicap-constants.js";
 import { buildFullName } from "./name-helpers.js";
 import { EVENT_TYPE_LIST, EVENT_TYPES } from "./event-constants.js";
 
-const resolvePartner = async (pid, doubles, person, query = defaultQuery) => {
-  if (doubles?.partner_pid) {
-    const result = await query("select * from people where pid = ?", [
-      doubles.partner_pid,
-    ]);
-    return result.rows[0] || null;
-  }
-
-  if (doubles?.partner_first_name && doubles?.partner_last_name) {
-    const result = await query(
-      `
-      select pid, first_name, last_name, nickname
-      from people
-      where lower(first_name) = lower(?)
-        and lower(last_name) = lower(?)
-        and pid <> ?
-      limit 1
-      `,
-      [doubles.partner_first_name, doubles.partner_last_name, pid]
-    );
-    if (result.rows[0]) return result.rows[0];
-  }
-
-  if (person.did) {
-    const result = await query(
-      "select pid, first_name, last_name, nickname from people where did = ? and pid <> ? limit 1",
-      [person.did, pid]
-    );
-    return result.rows[0] || null;
-  }
-
-  return null;
-};
-
 const buildPartnerName = (partner, doubles) => {
   if (partner) return buildFullName(partner);
   // Only use doubles name fields if partner_pid is set — when partner_pid is null
@@ -59,7 +25,21 @@ const formatParticipant = async (pid, query = defaultQuery) => {
   const { rows: mainResults } = await query(
     `
     SELECT
-      p.*,
+      p.pid,
+      p.first_name,
+      p.last_name,
+      p.nickname,
+      p.email,
+      p.phone,
+      p.birth_month,
+      p.birth_day,
+      p.city,
+      p.region,
+      p.country,
+      p.tnmt_id,
+      p.did,
+      p.division,
+      p.scratch_masters,
       t.tnmt_id as team_tnmt_id,
       t.team_name,
       t.slug as team_slug,
@@ -150,6 +130,8 @@ const formatParticipant = async (pid, query = defaultQuery) => {
     city: person.city,
     region: person.region,
     country: person.country,
+    division: person.division || null,
+    scratchMasters: person.scratch_masters === 1,
     bookAverage: bookAverage,
     team: {
       tnmtId: person.tnmt_id,
@@ -199,9 +181,9 @@ const upsertPerson = async (pid, updates, query = defaultQuery) => {
     `
     insert into people (
       pid, first_name, last_name, nickname, email, phone, birth_month, birth_day,
-      city, region, country, tnmt_id, did, updated_at
+      city, region, country, tnmt_id, did, scratch_masters, updated_at
     )
-    values (?,?,?,?,?,?,?,?,?,?,?,?, ?, now())
+    values (?,?,?,?,?,?,?,?,?,?,?,?,?,?, now())
     on duplicate key update
       first_name = values(first_name),
       last_name = values(last_name),
@@ -215,6 +197,7 @@ const upsertPerson = async (pid, updates, query = defaultQuery) => {
       country = values(country),
       tnmt_id = values(tnmt_id),
       did = values(did),
+      scratch_masters = values(scratch_masters),
       updated_at = now()
     `,
     [
@@ -231,6 +214,7 @@ const upsertPerson = async (pid, updates, query = defaultQuery) => {
       updates.country,
       updates.team?.tnmtId || null,
       updates.doubles?.did || null,
+      updates.scratchMasters ? 1 : 0,
     ]
   );
 };
@@ -346,6 +330,7 @@ const buildChanges = (current, updates) => {
   addChange("region", current.region, updates.region);
   addChange("country", current.country, updates.country);
   addChange("book_average", current.bookAverage, updates.bookAverage);
+  addChange("scratch_masters", current.scratchMasters ? 1 : 0, updates.scratchMasters ? 1 : 0);
   addChange("team_name", current.team?.name, updates.team?.name);
   addChange("team_id", current.team?.tnmtId, updates.team?.tnmtId);
   addChange("doubles_id", current.doubles?.did, updates.doubles?.did);
@@ -431,7 +416,7 @@ const checkPartnerConflict = async (newPartnerPid, currentPid, query = defaultQu
 const upsertReciprocalPartner = async (partnerPid, currentPid, query = defaultQuery) => {
   // Look up partner's did from people table
   const { rows } = await query(
-    "SELECT did FROM people WHERE pid = ?",
+    "SELECT did, nickname FROM people WHERE pid = ?",
     [partnerPid]
   );
   const partnerDid = rows?.[0]?.did;

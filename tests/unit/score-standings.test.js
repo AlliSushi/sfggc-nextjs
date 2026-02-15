@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 let mod;
 try {
@@ -427,5 +428,27 @@ describe("buildScoreStandings", () => {
     assert.strictEqual(result.team.length, 1);
     assert.strictEqual(result.doubles.length, 1);
     assert.strictEqual(result.singles.length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchDoublesRows query structure (source analysis)
+// ---------------------------------------------------------------------------
+
+describe("fetchDoublesRows query structure", () => {
+  const scoresRoute = readFileSync("src/pages/api/portal/scores.js", "utf-8").toLowerCase();
+
+  it("Given scores API, when checking doubles query, then joins doubles_pairs to people via pid (not did)", () => {
+    assert.ok(
+      scoresRoute.includes("p.pid = dp.pid"),
+      "fetchDoublesRows must join people on p.pid = dp.pid — joining on p.did = dp.did returns each person as a solo pair because IGBO XML assigns cross-referenced did values"
+    );
+  });
+
+  it("Given scores API, when checking doubles query, then uses LEAST to compute canonical pair key", () => {
+    assert.ok(
+      scoresRoute.includes("least("),
+      "fetchDoublesRows must use LEAST(dp.pid, dp.partner_pid) to create a canonical pair grouping key so both partners share the same did"
+    );
   });
 });

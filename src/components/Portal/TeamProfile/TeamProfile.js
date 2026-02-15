@@ -2,13 +2,13 @@ import React from "react";
 import Link from "next/link";
 import ScoreCard from "../ScoreCard/ScoreCard";
 import styles from "./TeamProfile.module.scss";
-
-const TEAM_SIZE = 4;
+import { TEAM_SIZE } from "../../../utils/portal/team-constants.js";
 
 const TeamProfile = ({
   team,
   roster = [],
   isAdmin = false,
+  showStandingsLink = isAdmin,
   participantReturnTo = "",
   appendFromParam = (href) => href,
 }) => {
@@ -111,14 +111,16 @@ const TeamProfile = ({
           </table>
         </div>
 
-        <div className="mt-3 text-center">
-          <Link
-            href={appendFromParam("/portal/scores", participantReturnTo)}
-            className="btn btn-outline-primary"
-          >
-            View Standings
-          </Link>
-        </div>
+        {showStandingsLink && (
+          <div className="mt-3 text-center">
+            <Link
+              href={appendFromParam("/portal/scores", participantReturnTo)}
+              className="btn btn-outline-primary"
+            >
+              View Standings
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   );

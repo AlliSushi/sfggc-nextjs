@@ -50,6 +50,17 @@ describe("Handicap calculation and display", () => {
     );
   });
 
+  test("Given XML import, when deriving divisions, then it uses getDivisionFromAverage from division-constants", () => {
+    const importSrc = fs.readFileSync(IMPORT_SCRIPT, "utf-8");
+    const importsDivisionHelper = importSrc.includes("getDivisionFromAverage");
+    const callsDivisionHelper = importSrc.match(/getDivisionFromAverage\s*\(/);
+
+    assert.ok(
+      importsDivisionHelper && callsDivisionHelper,
+      "Import script must import and use getDivisionFromAverage for people division assignment"
+    );
+  });
+
   test("Given XML import with book average, when building import rows, then handicap is calculated and included", () => {
     const importSrc = fs.readFileSync(IMPORT_SCRIPT, "utf-8");
 
@@ -59,6 +70,17 @@ describe("Handicap calculation and display", () => {
     assert.ok(
       setsHandicap,
       "buildImportRows must calculate and set handicap for scores"
+    );
+  });
+
+  test("Given XML import person upsert SQL, when writing people rows, then division column is inserted and updated", () => {
+    const importSrc = fs.readFileSync(IMPORT_SCRIPT, "utf-8");
+    const insertsDivision = importSrc.match(/insert into people[\s\S]{0,600}division/i);
+    const updatesDivision = importSrc.match(/division\s*=\s*values\(division\)/i);
+
+    assert.ok(
+      insertsDivision && updatesDivision,
+      "Import script must persist division in people INSERT and ON DUPLICATE KEY UPDATE clauses"
     );
   });
 

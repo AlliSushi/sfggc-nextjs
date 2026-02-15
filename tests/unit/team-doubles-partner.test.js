@@ -31,21 +31,21 @@ describe("fetchTeamMembers doubles_pairs JOIN", () => {
 });
 
 // ---------------------------------------------------------------------------
-// resolvePartner — must respect cleared partner_pid (did fallback)
+// resolveRosterPartner — must respect cleared partner_pid (did fallback)
 // ---------------------------------------------------------------------------
 
 describe("resolvePartner cleared partner_pid", () => {
   it("Given a team member with partner_pid explicitly null (cleared), when resolvePartner runs, then the did-sharing fallback must not find a partner", () => {
     // When partner_pid is null (cleared by admin), the shared-did and name-matching
-    // fallbacks should NOT override the cleared partner. resolvePartner must check
+    // fallbacks should NOT override the cleared partner. resolveRosterPartner must check
     // for doubles_did to detect an existing doubles_pairs entry and return early.
     const resolvePartnerSource = teamSrc.match(
-      /const resolvePartner[\s\S]*?return null;\s*\};/
+      /const resolveRosterPartner[\s\S]*?return null;\s*\};/
     )?.[0] || "";
 
     assert.ok(
       resolvePartnerSource.length > 0,
-      "resolvePartner function must exist in team API"
+      "resolveRosterPartner function must exist in team API"
     );
 
     // The function must guard against cleared partner_pid by checking doubles_did.
@@ -53,12 +53,12 @@ describe("resolvePartner cleared partner_pid", () => {
     // is authoritative — even when null.
     assert.ok(
       resolvePartnerSource.includes("doubles_did"),
-      "resolvePartner must check doubles_did to detect an existing doubles_pairs entry and skip fallbacks when partner was cleared"
+      "resolveRosterPartner must check doubles_did to detect an existing doubles_pairs entry and skip fallbacks when partner was cleared"
     );
   });
 
   it("Given fetchTeamMembers SQL, when selecting doubles_pairs fields, then it includes d.did as doubles_did for cleared-partner detection", () => {
-    // resolvePartner needs doubles_did to distinguish "no doubles_pairs row"
+    // resolveRosterPartner needs doubles_did to distinguish "no doubles_pairs row"
     // (partner_pid null from LEFT JOIN) from "doubles_pairs row with cleared partner_pid".
     assert.ok(
       teamSrc.includes("d.did as doubles_did"),

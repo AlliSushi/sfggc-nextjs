@@ -13,6 +13,7 @@ import useAdminSession from "../../../hooks/portal/useAdminSession.js";
 import { buildParticipantPageProps } from "../../../utils/portal/participant-page-ssr.js";
 import { portalFetch } from "../../../utils/portal/portal-fetch.js";
 import { normalizeQueryValue, resolveBackHref } from "../../../utils/portal/navigation.js";
+import { toNumberOrNull } from "../../../utils/portal/number-utils.js";
 
 const DEFAULT_SCORES = ["", "", ""];
 
@@ -35,16 +36,11 @@ const buildFormState = (participant) => ({
   laneDoubles: participant?.lanes?.doubles || "",
   laneSingles: participant?.lanes?.singles || "",
   avgEntering: participant?.bookAverage ?? participant?.averages?.entering ?? "",
+  scratchMasters: participant?.scratchMasters ? "1" : "0",
   teamScores: participant?.scores?.team || DEFAULT_SCORES,
   doublesScores: participant?.scores?.doubles || DEFAULT_SCORES,
   singlesScores: participant?.scores?.singles || DEFAULT_SCORES,
 });
-
-const toNumberOrNull = (value) => {
-  if (value === "" || value === null || value === undefined) return null;
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? null : parsed;
-};
 
 const buildPayload = (formState) => ({
   firstName: formState.firstName,
@@ -68,6 +64,7 @@ const buildPayload = (formState) => ({
   averages: {
     entering: toNumberOrNull(formState.avgEntering),
   },
+  scratchMasters: formState.scratchMasters === "1",
   scores: {
     team: formState.teamScores.map(toNumberOrNull).filter((v) => v !== null),
     doubles: formState.doublesScores.map(toNumberOrNull).filter((v) => v !== null),
@@ -75,7 +72,12 @@ const buildPayload = (formState) => ({
   },
 });
 
-const ParticipantProfilePage = ({ participant: initialParticipant }) => {
+const ParticipantProfilePage = ({
+  participant: initialParticipant,
+  scoresVisibleToParticipants = false,
+  scratchMastersVisibleToParticipants = false,
+  optionalEventsVisibleToParticipants = false,
+}) => {
   const router = useRouter();
   const { pid } = router.query;
   const from = normalizeQueryValue(router.query.from);
@@ -291,7 +293,16 @@ const ParticipantProfilePage = ({ participant: initialParticipant }) => {
 
         {error && <div className="alert alert-danger">{error}</div>}
 
-        {!isEditing && <ParticipantProfile participant={participant} isAdmin={isAdmin} returnTo={router.asPath} />}
+        {!isEditing && (
+          <ParticipantProfile
+            participant={participant}
+            isAdmin={isAdmin}
+            showStandingsLink={isAdmin || scoresVisibleToParticipants}
+            showScratchMastersLink={isAdmin || scratchMastersVisibleToParticipants}
+            showOptionalEventsLink={isAdmin || optionalEventsVisibleToParticipants}
+            returnTo={router.asPath}
+          />
+        )}
 
         {isAdmin && isEditing && (
           <ParticipantEditForm

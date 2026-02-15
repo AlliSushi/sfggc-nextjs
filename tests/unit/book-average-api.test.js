@@ -41,6 +41,16 @@ describe("Book average (entering_avg) in participant APIs", () => {
     );
   });
 
+  test("Given formatParticipant function, when formatting participant data, then it returns division property", () => {
+    const dbSrc = fs.readFileSync(PARTICIPANT_DB, "utf-8");
+    const returnsDivision = dbSrc.match(/return \{[\s\S]{0,1400}division:/);
+
+    assert.ok(
+      returnsDivision,
+      "formatParticipant must return division property"
+    );
+  });
+
   test("Given participant detail API (GET), when returning single participant, then it uses formatParticipant which includes bookAverage", () => {
     const apiSrc = fs.readFileSync(PARTICIPANT_DETAIL_API, "utf-8");
     const dbSrc = fs.readFileSync(PARTICIPANT_DB, "utf-8");

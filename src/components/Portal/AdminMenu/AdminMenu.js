@@ -152,8 +152,18 @@ const AdminMenu = ({ adminRole, onImportComplete }) => {
                 </Link>
               </li>
               <li>
+                <Link className="dropdown-item" href="/portal/admin/optional-events">
+                  Optional Events
+                </Link>
+              </li>
+              <li>
+                <Link className="dropdown-item" href="/portal/admin/scratch-masters">
+                  Scratch Masters
+                </Link>
+              </li>
+              <li>
                 <Link className="dropdown-item" href="/portal/scores">
-                  Score Standings
+                  Standings
                 </Link>
               </li>
               <li>

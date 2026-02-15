@@ -8,6 +8,9 @@ const ParticipantProfile = ({
   participant,
   preview = false,
   isAdmin = false,
+  showStandingsLink = isAdmin,
+  showScratchMastersLink = false,
+  showOptionalEventsLink = false,
   partnerLinkBase = null,
   returnTo = "",
 }) => {
@@ -130,6 +133,14 @@ const ParticipantProfile = ({
             <p className="mb-1">
               Book Average: {participant.bookAverage ?? "—"}
             </p>
+            <p className="mb-1">
+              Division: {participant.division ?? "—"}
+            </p>
+            {showAdminDetails && (
+              <p className="mb-1">
+                Scratch Masters: {participant.scratchMasters ? "Yes" : "No"}
+              </p>
+            )}
             <p className="mb-0">
               Handicap: {participant.averages?.handicap ?? "—"}
             </p>
@@ -148,14 +159,34 @@ const ParticipantProfile = ({
           </div>
         </div>
 
-        <div className="mt-3 text-center">
-          <Link
-            href={appendFromParam("/portal/scores", returnTo)}
-            className="btn btn-outline-primary"
-          >
-            View Standings
-          </Link>
-        </div>
+        {(showStandingsLink || showScratchMastersLink || showOptionalEventsLink) && (
+          <div className="mt-3 text-center d-flex justify-content-center gap-2 flex-wrap">
+            {showStandingsLink && (
+            <Link
+              href={appendFromParam("/portal/scores", returnTo)}
+              className="btn btn-outline-primary"
+            >
+              View Standings
+            </Link>
+            )}
+            {showScratchMastersLink && (
+              <Link
+                href={appendFromParam("/portal/admin/scratch-masters", returnTo)}
+                className="btn btn-outline-primary"
+              >
+                View Scratch Masters
+              </Link>
+            )}
+            {showOptionalEventsLink && (
+              <Link
+                href={appendFromParam("/portal/admin/optional-events", returnTo)}
+                className="btn btn-outline-primary"
+              >
+                View Optional Events
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

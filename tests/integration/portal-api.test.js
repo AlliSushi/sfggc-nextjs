@@ -1077,6 +1077,74 @@ test(
 );
 
 test(
+  "Given an expired participant link and a new login request, when verifying with the newest token, then participant login succeeds",
+  async (t) => {
+    if (!dbReady) {
+      t.skip(dbSkipReason || "Database not available");
+      return;
+    }
+    await db.pool.query("insert into teams (tnmt_id, team_name) values (?,?)", [
+      "2305",
+      "Well, No Split!",
+    ]);
+    await seedParticipant(db.pool, {
+      pid: "3336",
+      firstName: "Robert",
+      lastName: "Aldeguer",
+      email: "robert@example.com",
+      teamId: "2305",
+      did: "1076",
+    });
+
+    await db.pool.query(
+      `
+      insert into participant_login_tokens (token, pid, expires_at)
+      values (?,?, date_sub(now(), interval 1 minute))
+      `,
+      ["old-expired-token", "3336"]
+    );
+
+    const loginHandler = await loadHandler("src/pages/api/portal/participant/login.js");
+    const loginServer = await createApiServer(loginHandler);
+    const loginResponse = await fetch(`${loginServer.url}/api/portal/participant/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "robert@example.com" }),
+    });
+    await loginServer.close();
+    assert.equal(loginResponse.status, 200);
+
+    const [tokenRows] = await db.pool.query(
+      `
+      select token
+      from participant_login_tokens
+      where pid = ?
+      order by expires_at desc
+      limit 1
+      `,
+      ["3336"]
+    );
+    const newToken = tokenRows[0]?.token;
+    assert.ok(newToken, "new login request should create a token");
+    assert.notEqual(newToken, "old-expired-token");
+
+    const verifyHandler = await loadHandler("src/pages/api/portal/participant/verify.js");
+    const verifyServer = await createApiServer(verifyHandler);
+    const verifyResponse = await fetch(
+      `${verifyServer.url}/api/portal/participant/verify?token=${newToken}`,
+      { redirect: "manual" }
+    );
+    await verifyServer.close();
+
+    assert.equal(verifyResponse.status, 302);
+    assert.ok(
+      verifyResponse.headers.get("location")?.includes("/portal/participant/3336"),
+      "new token should authenticate and redirect to participant page"
+    );
+  }
+);
+
+test(
   "Given a team with a captain and doubles pairings, when fetching by slug, then roster is ordered",
   async (t) => {
     if (!dbReady) {

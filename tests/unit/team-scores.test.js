@@ -110,6 +110,17 @@ test(
 );
 
 test(
+  "Given ParticipantProfile component, when rendering averages card, then it displays participant division",
+  () => {
+    const content = readFile("src/components/Portal/ParticipantProfile/ParticipantProfile.js");
+    assert.ok(
+      content.includes("Division: {participant.division ?? \"—\"}"),
+      "ParticipantProfile must display participant division with em-dash fallback"
+    );
+  }
+);
+
+test(
   "Given both profile components, when checking for duplicate score formatting, then neither contains a local formatScores function",
   () => {
     const teamContent = readFile("src/components/Portal/TeamProfile/TeamProfile.js");

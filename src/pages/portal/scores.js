@@ -6,14 +6,14 @@ import PortalShell from "../../components/Portal/PortalShell/PortalShell";
 import AdminMenu from "../../components/Portal/AdminMenu/AdminMenu";
 import PortalModal from "../../components/Portal/PortalModal/PortalModal";
 import useAdminSession from "../../hooks/portal/useAdminSession.js";
+import useVisibilityToggle from "../../hooks/portal/useVisibilityToggle.js";
 import { portalFetch } from "../../utils/portal/portal-fetch.js";
 import { EVENT_LABELS, EVENT_TYPE_LIST, EVENT_TYPES, resolveInitialEvent } from "../../utils/portal/event-constants.js";
-import { getAuthSessions } from "../../utils/portal/auth-guards.js";
 import { appendFromParam, normalizeQueryValue, resolveBackHref } from "../../utils/portal/navigation.js";
 import { hasAnyScores } from "../../utils/portal/score-standings.js";
-import { EM_DASH } from "../../utils/portal/display-constants.js";
-
-const formatScore = (value) => (value != null ? value : EM_DASH);
+import { formatScore } from "../../utils/portal/display-constants.js";
+import { getScoresVisibleToParticipants } from "../../utils/portal/portal-settings-db.js";
+import { requireSessionWithVisibilitySSR } from "../../utils/portal/ssr-helpers.js";
 const EVENT_NAME_HEADERS = {
   [EVENT_TYPES.TEAM]: "Team",
   [EVENT_TYPES.DOUBLES]: "Pair",
@@ -36,7 +36,7 @@ const renderScoreCells = (entry) => (
   </>
 );
 
-const ScoreStandingsPage = () => {
+const ScoreStandingsPage = ({ initialParticipantsCanViewScores = false }) => {
   const router = useRouter();
   const { isAdmin, adminRole } = useAdminSession();
   const from = normalizeQueryValue(router.query.from);
@@ -49,6 +49,13 @@ const ScoreStandingsPage = () => {
   const [error, setError] = useState("");
   const [showClearModal, setShowClearModal] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const { value: participantsCanViewScores, updateVisibility: updateScoresVisibility } =
+    useVisibilityToggle({
+      initialValue: initialParticipantsCanViewScores,
+      endpoint: "/api/portal/admin/scores/visibility",
+      valueKey: "participantsCanViewScores",
+      errorMessage: "Unable to update scores visibility.",
+    });
   const isSuperAdmin = adminRole === "super-admin";
 
   useEffect(() => {
@@ -77,7 +84,7 @@ const ScoreStandingsPage = () => {
         setStandings(nextStandings);
       })
       .catch(() => {
-        setError("Unable to load score standings.");
+        setError("Unable to load standings.");
       })
       .finally(() => setLoading(false));
   }, [refreshKey]);
@@ -164,7 +171,7 @@ const ScoreStandingsPage = () => {
   return (
     <div>
       <PortalShell
-        title="Score standings"
+        title="Standings"
         subtitle="View team, doubles, and singles standings ranked by total score."
       >
         {from && (
@@ -193,6 +200,21 @@ const ScoreStandingsPage = () => {
           </div>
           {isAdmin && (
             <div className="col-12 col-md-4 text-md-end d-flex justify-content-md-end gap-2">
+              <button
+                type="button"
+                className={`btn ${participantsCanViewScores ? "btn-success" : "btn-outline-secondary"}`}
+                onClick={() =>
+                  updateScoresVisibility({
+                    enabled: !participantsCanViewScores,
+                    canUpdate: isAdmin,
+                    onError: setError,
+                  })
+                }
+                aria-pressed={participantsCanViewScores}
+                aria-label="Participants can view standings"
+              >
+                {participantsCanViewScores ? "On" : "Off"}
+              </button>
               {isSuperAdmin && (
                 <button
                   className="btn btn-outline-danger"
@@ -211,7 +233,7 @@ const ScoreStandingsPage = () => {
         </div>
 
         {error && <div className="alert alert-danger">{error}</div>}
-        {loading && <div className="text-muted">Loading score standings...</div>}
+        {loading && <div className="text-muted">Loading standings...</div>}
 
         {!loading && !hasAnyScores(standings) && (
           <div className="alert alert-info">
@@ -280,11 +302,11 @@ const ScoreStandingsPage = () => {
 };
 
 export const getServerSideProps = async ({ req }) => {
-  const { hasSession } = getAuthSessions(req);
-  if (!hasSession) {
-    return { redirect: { destination: "/portal/", permanent: false } };
-  }
-  return { props: {} };
+  return requireSessionWithVisibilitySSR({
+    req,
+    getParticipantVisibility: getScoresVisibleToParticipants,
+    visibilityPropName: "initialParticipantsCanViewScores",
+  });
 };
 
 ScoreStandingsPage.getLayout = function getLayout(page) {

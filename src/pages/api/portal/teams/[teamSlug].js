@@ -1,7 +1,7 @@
 import { query } from "../../../../utils/portal/db.js";
 import { toTeamSlug } from "../../../../utils/portal/slug.js";
-import { getAuthSessions } from "../../../../utils/portal/auth-guards.js";
-import { forbidden, methodNotAllowed, unauthorized } from "../../../../utils/portal/http.js";
+import { requireAnySession } from "../../../../utils/portal/auth-guards.js";
+import { methodNotAllowed } from "../../../../utils/portal/http.js";
 import { buildDisplayName } from "../../../../utils/portal/name-helpers.js";
 import { EVENT_TYPES } from "../../../../utils/portal/event-constants.js";
 import { extractTeamScores, extractTeamLane, extractDoublesPairScores } from "../../../../utils/portal/team-scores.js";
@@ -16,7 +16,7 @@ const sortByTeamOrder = (a, b) => {
   return (a.first_name || "").localeCompare(b.first_name || "");
 };
 
-const resolvePartner = ({ member, memberIndex, didIndex }) => {
+const resolveRosterPartner = ({ member, memberIndex, didIndex }) => {
   if (member.partner_pid && memberIndex.has(member.partner_pid)) {
     return memberIndex.get(member.partner_pid);
   }
@@ -41,10 +41,7 @@ const resolvePartner = ({ member, memberIndex, didIndex }) => {
   return null;
 };
 
-const orderRoster = (roster) => {
-  if (!roster.length) return [];
-
-  const memberIndex = new Map(roster.map((member) => [member.pid, member]));
+const buildDidIndex = (roster) => {
   const didIndex = new Map();
   roster.forEach((member) => {
     if (!member.did) return;
@@ -52,26 +49,31 @@ const orderRoster = (roster) => {
     list.push(member.pid);
     didIndex.set(member.did, list);
   });
+  return didIndex;
+};
 
-  const rosterWithPartner = roster.map((member) => ({
+const attachResolvedPartners = (roster) => {
+  const memberIndex = new Map(roster.map((member) => [member.pid, member]));
+  const didIndex = buildDidIndex(roster);
+  return roster.map((member) => ({
     ...member,
-    partner: resolvePartner({ member, memberIndex, didIndex }),
+    partner: resolveRosterPartner({ member, memberIndex, didIndex }),
   }));
+};
 
+const seedCaptainAndPartner = (rosterWithPartner, used) => {
   const captain = rosterWithPartner.find((member) => member.team_captain);
-  if (!captain) {
-    return rosterWithPartner.sort(sortByTeamOrder);
-  }
-
-  const ordered = [];
-  const used = new Set();
-  ordered.push(captain);
+  if (!captain) return [];
+  const ordered = [captain];
   used.add(captain.pid);
   if (captain.partner) {
     ordered.push(captain.partner);
     used.add(captain.partner.pid);
   }
+  return ordered;
+};
 
+const appendSortedRemainingMembers = ({ rosterWithPartner, ordered, used }) => {
   const remaining = rosterWithPartner
     .filter((member) => !used.has(member.pid))
     .sort(sortByTeamOrder);
@@ -92,51 +94,21 @@ const orderRoster = (roster) => {
       }
     }
   }
+};
+
+const orderRoster = (roster) => {
+  if (!roster.length) return [];
+
+  const rosterWithPartner = attachResolvedPartners(roster);
+  if (!rosterWithPartner.some((member) => member.team_captain)) {
+    return rosterWithPartner.sort(sortByTeamOrder);
+  }
+
+  const used = new Set();
+  const ordered = seedCaptainAndPartner(rosterWithPartner, used);
+  appendSortedRemainingMembers({ rosterWithPartner, ordered, used });
 
   return ordered;
-};
-
-const resolveParticipantTeamSlug = async (pid) => {
-  const { rows } = await query(
-    `
-    select t.team_name, t.slug
-    from people p
-    left join teams t on p.tnmt_id = t.tnmt_id
-    where p.pid = ?
-    limit 1
-    `,
-    [pid]
-  );
-  const team = rows?.[0];
-  if (!team) {
-    return null;
-  }
-  return team.slug || (team.team_name ? toTeamSlug(team.team_name) : null);
-};
-
-const authenticateRequest = (req, res) => {
-  const { adminSession, participantSession } = getAuthSessions(req);
-  if (!adminSession && !participantSession) {
-    unauthorized(res);
-    return null;
-  }
-  return { adminSession, participantSession };
-};
-
-const authorizeParticipant = async (teamSlug, participantSession, res) => {
-  if (!participantSession) {
-    return true;
-  }
-  const participantTeamSlug = await resolveParticipantTeamSlug(participantSession.pid);
-  const normalizedRequest = toTeamSlug(teamSlug || "");
-  const allowedSlugs = new Set(
-    [participantTeamSlug, toTeamSlug(participantTeamSlug || "")].filter(Boolean)
-  );
-  if (!participantTeamSlug || !allowedSlugs.has(normalizedRequest)) {
-    forbidden(res);
-    return false;
-  }
-  return true;
 };
 
 const fetchTeamBySlug = async (teamSlug) => {
@@ -217,13 +189,8 @@ export default async function handler(req, res) {
       return;
     }
 
-    const sessions = authenticateRequest(req, res);
-    if (!sessions) {
-      return;
-    }
-
-    const authorized = await authorizeParticipant(teamSlug, sessions.participantSession, res);
-    if (!authorized) {
+    const auth = await requireAnySession(req, res);
+    if (!auth) {
       return;
     }
 

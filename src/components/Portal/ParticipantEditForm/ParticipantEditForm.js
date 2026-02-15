@@ -98,6 +98,20 @@ const ParticipantEditForm = ({ formState, onFieldChange, onScoreChange }) => {
         onChange={onFieldChange("country")}
         colClass="col-12 col-md-4"
       />
+      <div className="col-12 col-md-4">
+        <label className="form-label" htmlFor="scratch-masters">
+          Scratch Masters
+        </label>
+        <select
+          id="scratch-masters"
+          className="form-select"
+          value={formState.scratchMasters}
+          onChange={onFieldChange("scratchMasters")}
+        >
+          <option value="1">Yes</option>
+          <option value="0">No</option>
+        </select>
+      </div>
 
       <div className="col-12">
         <hr />

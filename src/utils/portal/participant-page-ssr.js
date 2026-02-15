@@ -5,6 +5,11 @@ import {
   verifyToken,
 } from "./session.js";
 import { buildBaseUrl } from "./ssr-helpers.js";
+import {
+  getScoresVisibleToParticipants,
+  getScratchMastersVisibleToParticipants,
+  getOptionalEventsVisibleToParticipants,
+} from "./portal-settings-db.js";
 
 const buildParticipantPageProps = async ({ params, req, fetcher = fetch }) => {
   try {
@@ -28,7 +33,7 @@ const buildParticipantPageProps = async ({ params, req, fetcher = fetch }) => {
     };
   }
 
-  const baseUrl = buildBaseUrl(req);
+  const baseUrl = buildBaseUrl();
 
   const response = await fetcher(
     `${baseUrl}/api/portal/participants/${encodeURIComponent(params.pid)}`,
@@ -52,9 +57,15 @@ const buildParticipantPageProps = async ({ params, req, fetcher = fetch }) => {
   }
 
   const participant = await response.json();
+  const scoresVisibleToParticipants = await getScoresVisibleToParticipants();
+  const scratchMastersVisibleToParticipants = await getScratchMastersVisibleToParticipants();
+  const optionalEventsVisibleToParticipants = await getOptionalEventsVisibleToParticipants();
   return {
     props: {
       participant,
+      scoresVisibleToParticipants,
+      scratchMastersVisibleToParticipants,
+      optionalEventsVisibleToParticipants,
     },
   };
 };

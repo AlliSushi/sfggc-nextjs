@@ -6,7 +6,9 @@ import { XMLParser } from "fast-xml-parser";
 import { withTransaction } from "./db.js";
 import { toTeamSlug } from "./slug.js";
 import { calculateHandicap } from "./handicap-constants.js";
+import { getDivisionFromAverage } from "./division-constants.js";
 import { EVENT_TYPE_LIST } from "./event-constants.js";
+import { toNumberOrNull as toNumber } from "./number-utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,12 +25,6 @@ if (!process.env.PORTAL_DATABASE_URL) {
 }
 
 const toText = (value) => (value === undefined || value === null ? "" : String(value));
-const toNumber = (value) => {
-  if (value === undefined || value === null || value === "") return null;
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? null : parsed;
-};
-
 /**
  * Sanitize phone number by removing invisible Unicode formatting characters.
  * These characters (like U+202C POP DIRECTIONAL FORMATTING) can cause database
@@ -104,6 +100,7 @@ const buildImportRows = (people) => {
     const doublesFirstName = toText(person.DOUBLES_FIRST_NAME);
     const doublesLastName = toText(person.DOUBLES_LAST_NAME);
     const bookAvg = toNumber(person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE);
+    const division = getDivisionFromAverage(bookAvg);
 
     if (teamId && teamName) {
       teams.set(teamId, {
@@ -141,6 +138,7 @@ const buildImportRows = (people) => {
       country,
       tnmt_id: teamId || null,
       did: doublesId || null,
+      division,
       team_captain: teamCaptain,
       team_order: teamOrder,
     });
@@ -185,6 +183,11 @@ const importIgboXml = async (xmlText) => {
       `
       alter table people
         add column if not exists nickname text,
+        add column if not exists division varchar(1),
+        add column if not exists optional_events tinyint(1) not null default 0,
+        add column if not exists optional_best_3_of_9 tinyint(1) not null default 0,
+        add column if not exists optional_scratch tinyint(1) not null default 0,
+        add column if not exists optional_all_events_hdcp tinyint(1) not null default 0,
         add column if not exists team_captain boolean default false,
         add column if not exists team_order int
       `
@@ -239,9 +242,9 @@ const importIgboXml = async (xmlText) => {
         `
         insert into people (
           pid, first_name, last_name, nickname, email, phone, birth_month, birth_day,
-          city, region, country, tnmt_id, did, team_captain, team_order, updated_at
+          city, region, country, tnmt_id, did, division, team_captain, team_order, updated_at
         )
-        values (?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?, now())
+        values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?, now())
         on duplicate key update
           first_name = values(first_name),
           last_name = values(last_name),
@@ -255,6 +258,7 @@ const importIgboXml = async (xmlText) => {
           country = values(country),
           tnmt_id = values(tnmt_id),
           did = values(did),
+          division = values(division),
           team_captain = values(team_captain),
           team_order = values(team_order),
           updated_at = now()
@@ -273,6 +277,7 @@ const importIgboXml = async (xmlText) => {
           person.country,
           person.tnmt_id,
           person.did,
+          person.division,
           person.team_captain,
           person.team_order,
         ]

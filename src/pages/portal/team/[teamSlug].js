@@ -8,7 +8,7 @@ import useAdminSession from "../../../hooks/portal/useAdminSession.js";
 import { buildTeamPageProps } from "../../../utils/portal/team-page-ssr.js";
 import { appendFromParam, normalizeQueryValue, resolveBackHref } from "../../../utils/portal/navigation.js";
 
-const TeamPage = ({ team, roster }) => {
+const TeamPage = ({ team, roster, scoresVisibleToParticipants = false }) => {
   const router = useRouter();
   const { isAdmin, adminRole } = useAdminSession();
   const from = normalizeQueryValue(router.query.from);
@@ -40,6 +40,7 @@ const TeamPage = ({ team, roster }) => {
           team={team}
           roster={roster}
           isAdmin={isAdmin}
+          showStandingsLink={isAdmin || scoresVisibleToParticipants}
           participantReturnTo={participantReturnTo}
           appendFromParam={appendFromParam}
         />
