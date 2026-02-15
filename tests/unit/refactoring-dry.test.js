@@ -95,8 +95,8 @@ test(
       "participant-page-ssr must import from ssr-helpers"
     );
     assert.ok(
-      content.includes("buildBaseUrl(req)"),
-      "participant-page-ssr must call buildBaseUrl(req)"
+      content.includes("buildBaseUrl()"),
+      "participant-page-ssr must call buildBaseUrl()"
     );
     assert.ok(
       !content.includes("req.headers.host"),
@@ -114,8 +114,8 @@ test(
       "team-page-ssr must import from ssr-helpers"
     );
     assert.ok(
-      content.includes("buildBaseUrl(req)"),
-      "team-page-ssr must call buildBaseUrl(req)"
+      content.includes("buildBaseUrl()"),
+      "team-page-ssr must call buildBaseUrl()"
     );
     assert.ok(
       !content.includes("req.headers.host"),
@@ -133,8 +133,8 @@ test(
       "admin-preview-page-ssr must import from ssr-helpers"
     );
     assert.ok(
-      content.includes("buildBaseUrl(req)"),
-      "admin-preview-page-ssr must call buildBaseUrl(req)"
+      content.includes("buildBaseUrl()"),
+      "admin-preview-page-ssr must call buildBaseUrl()"
     );
     assert.ok(
       !content.includes("req.headers.host"),

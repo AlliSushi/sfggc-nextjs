@@ -1,6 +1,11 @@
 import { randomUUID } from "crypto";
 import { writeAuditEntries } from "./audit.js";
-import { validateRequiredColumns, wouldClobberExisting } from "./import-csv-helpers.js";
+import {
+  validateRequiredColumns,
+  buildPersonNameIndex,
+  wouldClobberExisting,
+} from "./import-csv-helpers.js";
+import { toNumberOrNull } from "./number-utils.js";
 
 const REQUIRED_COLUMNS = [
   "Bowler name",
@@ -9,16 +14,6 @@ const REQUIRED_COLUMNS = [
   "Team name",
   "Lane number",
 ];
-
-const normalizeScoreValue = (value) => {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "number") return value;
-  const trimmed = String(value).trim();
-  if (trimmed === "") return null;
-  const num = Number(trimmed);
-  if (Number.isNaN(num)) return null;
-  return num;
-};
 
 const validateColumns = (headers) => validateRequiredColumns(headers, REQUIRED_COLUMNS);
 
@@ -65,7 +60,7 @@ const pivotRowsByBowler = (rows) => {
       });
     }
     const gameNum = parseInt(row["Game number"], 10);
-    const score = normalizeScoreValue(row["Scratch"]);
+    const score = toNumberOrNull(row["Scratch"]);
     const bowler = bowlers.get(key);
     if (gameNum === 1) bowler.game1 = score;
     else if (gameNum === 2) bowler.game2 = score;
@@ -75,35 +70,24 @@ const pivotRowsByBowler = (rows) => {
 };
 
 /**
+ * Doubles/singles CSVs use "Lane N" as the "Team name" column value
+ * instead of actual team names. These are lane identifiers, not team names,
+ * and should not be used for team comparison or disambiguation.
+ */
+const isLaneIdentifier = (value) => /^Lane \d+$/i.test(value);
+
+/**
  * Check whether a CSV team name matches a DB team name,
  * accounting for truncation by the bowling scoring software.
+ * Returns true (assume ok) when either value is missing or when
+ * the CSV "team name" is actually a lane identifier (e.g. "Lane 7").
  */
 const teamNamesMatch = (csvTeamName, dbTeamName) => {
   if (!csvTeamName || !dbTeamName) return true; // can't compare, assume ok
+  if (isLaneIdentifier(csvTeamName)) return true; // lane ID, not a team name
   const csvLower = csvTeamName.toLowerCase();
   const dbLower = dbTeamName.toLowerCase();
   return dbLower.startsWith(csvLower) || csvLower.startsWith(dbLower);
-};
-
-const buildNameIndex = (dbPeople) => {
-  const nameIndex = new Map();
-  const addToIndex = (key, person) => {
-    if (!key) return;
-    const list = nameIndex.get(key) || [];
-    if (!list.some((p) => p.pid === person.pid)) list.push(person);
-    nameIndex.set(key, list);
-  };
-
-  for (const person of dbPeople) {
-    const fullName = `${person.first_name} ${person.last_name}`.toLowerCase().trim();
-    addToIndex(fullName, person);
-    if (person.nickname) {
-      const nickName = `${person.nickname} ${person.last_name}`.toLowerCase().trim();
-      if (nickName !== fullName) addToIndex(nickName, person);
-    }
-  }
-
-  return nameIndex;
 };
 
 const resolveMatchedPerson = (candidates, bowler) => {
@@ -151,7 +135,7 @@ const buildCrossReferenceWarnings = ({ bowler, person, eventType }) => {
     });
   }
 
-  if (eventType === "doubles" && (!person.pair_size || person.pair_size < 2)) {
+  if (eventType === "doubles" && !person.has_doubles_partner) {
     warnings.push({
       pid: person.pid,
       name: bowler.name,
@@ -175,20 +159,22 @@ const matchParticipants = async (bowlerMap, query, eventType) => {
   const unmatched = [];
   const warnings = [];
 
-  // Fetch all people with team names, existing scores, and doubles pair size
+  // Fetch all people with team names, existing scores, and doubles partner status
   const { rows: dbPeople } = await query(
     `SELECT p.pid, p.first_name, p.last_name, p.nickname, t.team_name,
-            s.lane, s.game1, s.game2, s.game3, dp_size.pair_size
+            s.lane, s.game1, s.game2, s.game3,
+            (dp.partner_pid IS NOT NULL) AS has_doubles_partner
      FROM people p
      LEFT JOIN teams t ON p.tnmt_id = t.tnmt_id
      LEFT JOIN scores s ON s.pid = p.pid AND s.event_type = ?
-     LEFT JOIN (
-       SELECT did, COUNT(*) AS pair_size FROM doubles_pairs GROUP BY did
-     ) dp_size ON dp_size.did = p.did`,
+     LEFT JOIN doubles_pairs dp ON dp.did = p.did`,
     [eventType]
   );
 
-  const nameIndex = buildNameIndex(dbPeople);
+  const nameIndex = buildPersonNameIndex(dbPeople, {
+    includeNickname: true,
+    normalizeName: (value) => String(value || "").toLowerCase().trim(),
+  });
 
   // Match each CSV bowler
   for (const [key, bowler] of bowlerMap) {
@@ -294,7 +280,6 @@ const importScores = async (matched, eventType, adminEmail, query) => {
 };
 
 export {
-  normalizeScoreValue,
   validateColumns,
   pivotRowsByBowler,
   matchParticipants,

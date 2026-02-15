@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { parseCSV } from "./csv";
+import { toNumberOrNull as toNumber } from "./number-utils.js";
 
 const EVENT_ENTRIES_FILE = "SFGGC Sample Table - EventEntries.csv";
 
@@ -25,14 +26,6 @@ const readEventEntries = () => {
 
   const raw = fs.readFileSync(filePath, "utf8");
   return parseCSV(raw);
-};
-
-const toNumber = (value) => {
-  if (value === undefined || value === null || value === "") {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? null : parsed;
 };
 
 const buildIndex = (entries) => {

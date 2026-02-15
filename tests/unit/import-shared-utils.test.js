@@ -8,6 +8,10 @@ import {
 } from "../../src/utils/portal/import-constants.js";
 import {
   validateRequiredColumns,
+  validateColumnsWithAliases,
+  resolveHeader,
+  normalizeImportName,
+  buildPersonNameIndex,
   wouldClobberExisting,
 } from "../../src/utils/portal/import-csv-helpers.js";
 import {
@@ -40,6 +44,57 @@ describe("import-csv-helpers", () => {
     assert.strictEqual(wouldClobberExisting(null, 1), true);
     assert.strictEqual(wouldClobberExisting(null, null), false);
     assert.strictEqual(wouldClobberExisting(1, null), false);
+  });
+
+  it("Given aliases, when resolving a header, then the matching alias is returned", () => {
+    const header = resolveHeader(["\uFEFFEID", "Last"], "EID", {
+      EID: ["EID", "\uFEFFEID"],
+    });
+    assert.strictEqual(header, "\uFEFFEID");
+  });
+
+  it("Given required columns and aliases, when validating, then the mapped headers are returned", () => {
+    const result = validateColumnsWithAliases(
+      ["Bowler name", "SM"],
+      ["Bowler Name", "SM?"],
+      {
+        "Bowler Name": ["Bowler Name", "Bowler name"],
+        "SM?": ["SM?", "SM"],
+      }
+    );
+
+    assert.deepStrictEqual(result, {
+      valid: true,
+      missing: [],
+      headerMap: {
+        "Bowler Name": "Bowler name",
+        "SM?": "SM",
+      },
+    });
+  });
+
+  it("Given punctuation and mixed case, when normalizing import names, then punctuation is removed and lowercased", () => {
+    assert.strictEqual(normalizeImportName(" O'Connor "), "oconnor");
+    assert.strictEqual(normalizeImportName("Joe-Bishop, Jr."), "joebishopjr");
+  });
+
+  it("Given people records, when building person name index with nickname+source, then first and nickname keys are both indexed", () => {
+    const index = buildPersonNameIndex(
+      [
+        {
+          pid: "P1",
+          first_name: "Joseph",
+          last_name: "Bishop",
+          nickname: "Joe",
+        },
+      ],
+      { includeNickname: true, withSource: true }
+    );
+
+    assert.equal(index.get("josephbishop").length, 1);
+    assert.equal(index.get("josephbishop")[0].source, "first");
+    assert.equal(index.get("joebishop").length, 1);
+    assert.equal(index.get("joebishop")[0].source, "nickname");
   });
 });
 

@@ -17,9 +17,14 @@ try {
   // Module doesn't exist yet; tests will fail with clear errors
   mod = {};
 }
+let numberUtils;
+try {
+  numberUtils = await import("../../src/utils/portal/number-utils.js");
+} catch {
+  numberUtils = {};
+}
 
 const {
-  normalizeScoreValue = () => { throw new Error("not implemented"); },
   validateColumns = () => { throw new Error("not implemented"); },
   pivotRowsByBowler = () => { throw new Error("not implemented"); },
   matchParticipants = () => { throw new Error("not implemented"); },
@@ -27,42 +32,50 @@ const {
   detectCsvEventType = () => { throw new Error("not implemented"); },
   REQUIRED_COLUMNS = [],
 } = mod;
+const {
+  toNumberOrNull = () => { throw new Error("not implemented"); },
+  normalizeScoreValue = undefined,
+} = numberUtils;
 
 // ---------------------------------------------------------------------------
-// normalizeScoreValue
+// toNumberOrNull
 // ---------------------------------------------------------------------------
 
-describe("normalizeScoreValue", () => {
+describe("toNumberOrNull", () => {
+  it("Given number-utils exports, when inspected, then normalizeScoreValue alias is not exported", () => {
+    assert.strictEqual(normalizeScoreValue, undefined);
+  });
+
   it('Given "180", when normalized, then returns 180', () => {
-    assert.strictEqual(normalizeScoreValue("180"), 180);
+    assert.strictEqual(toNumberOrNull("180"), 180);
   });
 
   it('Given "  200  ", when normalized, then returns 200', () => {
-    assert.strictEqual(normalizeScoreValue("  200  "), 200);
+    assert.strictEqual(toNumberOrNull("  200  "), 200);
   });
 
   it('Given "", when normalized, then returns null', () => {
-    assert.strictEqual(normalizeScoreValue(""), null);
+    assert.strictEqual(toNumberOrNull(""), null);
   });
 
   it("Given null, when normalized, then returns null", () => {
-    assert.strictEqual(normalizeScoreValue(null), null);
+    assert.strictEqual(toNumberOrNull(null), null);
   });
 
   it("Given undefined, when normalized, then returns null", () => {
-    assert.strictEqual(normalizeScoreValue(undefined), null);
+    assert.strictEqual(toNumberOrNull(undefined), null);
   });
 
   it('Given "abc", when normalized, then returns null', () => {
-    assert.strictEqual(normalizeScoreValue("abc"), null);
+    assert.strictEqual(toNumberOrNull("abc"), null);
   });
 
   it('Given "0", when normalized, then returns 0', () => {
-    assert.strictEqual(normalizeScoreValue("0"), 0);
+    assert.strictEqual(toNumberOrNull("0"), 0);
   });
 
   it("Given numeric 215, when normalized, then returns 215", () => {
-    assert.strictEqual(normalizeScoreValue(215), 215);
+    assert.strictEqual(toNumberOrNull(215), 215);
   });
 });
 
@@ -454,9 +467,37 @@ describe("matchParticipants", () => {
     assert.strictEqual(teamWarning, undefined, "Should not warn when DB name starts with CSV name");
   });
 
-  it("Given doubles event type and matched bowler with pair_size 1 (no shared did), when matched, then warning with type no_doubles_partner emitted", async () => {
+  it("Given doubles CSV where Team name is 'Lane 7', when matched, then no team_mismatch warning emitted", async () => {
     const mockQuery = createMatchMockQuery([
-      { pid: "P100", first_name: "Ronald", last_name: "Hua", team_name: "Day One Crew", lane: null, game1: null, game2: null, game3: null, pair_size: 1 },
+      { pid: "P100", first_name: "Peter", last_name: "Grady", team_name: "Wisteria Lanes", lane: null, game1: null, game2: null, game3: null, has_doubles_partner: 1 },
+    ]);
+    const bowlerMap = new Map([
+      ["peter grady", { name: "Peter Grady", csvTeamName: "Lane 7", csvLane: "7", game1: 124, game2: null, game3: null }],
+    ]);
+
+    const result = await matchParticipants(bowlerMap, mockQuery, "doubles");
+    assert.strictEqual(result.matched.length, 1);
+    const teamWarning = result.warnings.find((w) => w.type === "team_mismatch");
+    assert.strictEqual(teamWarning, undefined, "Should not warn when CSV team name is a lane identifier");
+  });
+
+  it("Given doubles CSV with 'Lane 12' team name and duplicate bowler names, when matched, then disambiguation skips lane identifier and returns unmatched", async () => {
+    const mockQuery = createMatchMockQuery([
+      { pid: "P100", first_name: "Robert", last_name: "Martin", team_name: "Wisteria Lanes", lane: null, game1: null, game2: null, game3: null, has_doubles_partner: 1 },
+      { pid: "P200", first_name: "Robert", last_name: "Martin", team_name: "Spare Me", lane: null, game1: null, game2: null, game3: null, has_doubles_partner: 1 },
+    ]);
+    const bowlerMap = new Map([
+      ["robert martin", { name: "Robert Martin", csvTeamName: "Lane 12", csvLane: "12", game1: 142, game2: null, game3: null }],
+    ]);
+
+    const result = await matchParticipants(bowlerMap, mockQuery, "doubles");
+    assert.strictEqual(result.matched.length, 0, "Cannot disambiguate with lane identifier");
+    assert.strictEqual(result.unmatched.length, 1);
+  });
+
+  it("Given doubles event type and matched bowler without a doubles partner, when matched, then warning with type no_doubles_partner emitted", async () => {
+    const mockQuery = createMatchMockQuery([
+      { pid: "P100", first_name: "Ronald", last_name: "Hua", team_name: "Day One Crew", lane: null, game1: null, game2: null, game3: null, has_doubles_partner: 0 },
     ]);
     const bowlerMap = new Map([
       ["ronald hua", { name: "Ronald Hua", csvTeamName: "Day One Crew", csvLane: "9", game1: 189, game2: null, game3: null }],
@@ -471,7 +512,7 @@ describe("matchParticipants", () => {
 
   it("Given doubles event type and matched bowler with no doubles_pairs row, when matched, then warning with type no_doubles_partner emitted", async () => {
     const mockQuery = createMatchMockQuery([
-      { pid: "P100", first_name: "Ronald", last_name: "Hua", team_name: "Day One Crew", lane: null, game1: null, game2: null, game3: null, pair_size: null },
+      { pid: "P100", first_name: "Ronald", last_name: "Hua", team_name: "Day One Crew", lane: null, game1: null, game2: null, game3: null, has_doubles_partner: null },
     ]);
     const bowlerMap = new Map([
       ["ronald hua", { name: "Ronald Hua", csvTeamName: "Day One Crew", csvLane: "9", game1: 189, game2: null, game3: null }],
@@ -480,12 +521,12 @@ describe("matchParticipants", () => {
     const result = await matchParticipants(bowlerMap, mockQuery, "doubles");
     assert.strictEqual(result.matched.length, 1);
     const partnerWarning = result.warnings.find((w) => w.type === "no_doubles_partner");
-    assert.ok(partnerWarning, "Expected a no_doubles_partner warning when pair_size is null");
+    assert.ok(partnerWarning, "Expected a no_doubles_partner warning when has_doubles_partner is null");
   });
 
-  it("Given doubles event type and matched bowler with pair_size 2 (properly paired), when matched, then no no_doubles_partner warning emitted", async () => {
+  it("Given doubles event type and matched bowler with a doubles partner assigned, when matched, then no no_doubles_partner warning emitted", async () => {
     const mockQuery = createMatchMockQuery([
-      { pid: "P100", first_name: "Ronald", last_name: "Hua", team_name: "Day One Crew", lane: null, game1: null, game2: null, game3: null, pair_size: 2 },
+      { pid: "P100", first_name: "Ronald", last_name: "Hua", team_name: "Day One Crew", lane: null, game1: null, game2: null, game3: null, has_doubles_partner: 1 },
     ]);
     const bowlerMap = new Map([
       ["ronald hua", { name: "Ronald Hua", csvTeamName: "Day One Crew", csvLane: "9", game1: 189, game2: null, game3: null }],
@@ -494,12 +535,12 @@ describe("matchParticipants", () => {
     const result = await matchParticipants(bowlerMap, mockQuery, "doubles");
     assert.strictEqual(result.matched.length, 1);
     const partnerWarning = result.warnings.find((w) => w.type === "no_doubles_partner");
-    assert.strictEqual(partnerWarning, undefined, "Should not warn when pair_size >= 2");
+    assert.strictEqual(partnerWarning, undefined, "Should not warn when has_doubles_partner is truthy");
   });
 
-  it("Given team event type and matched bowler with pair_size 1, when matched, then no no_doubles_partner warning emitted", async () => {
+  it("Given team event type and matched bowler without a doubles partner, when matched, then no no_doubles_partner warning emitted", async () => {
     const mockQuery = createMatchMockQuery([
-      { pid: "P100", first_name: "Ronald", last_name: "Hua", team_name: "Day One Crew", lane: null, game1: null, game2: null, game3: null, pair_size: 1 },
+      { pid: "P100", first_name: "Ronald", last_name: "Hua", team_name: "Day One Crew", lane: null, game1: null, game2: null, game3: null, has_doubles_partner: 0 },
     ]);
     const bowlerMap = new Map([
       ["ronald hua", { name: "Ronald Hua", csvTeamName: "Day One Crew", csvLane: "9", game1: 189, game2: null, game3: null }],
