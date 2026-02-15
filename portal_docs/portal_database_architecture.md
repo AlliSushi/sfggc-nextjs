@@ -1,6 +1,6 @@
 ---
 title: Portal Database Architecture
-updated: 2026-02-13
+updated: 2026-02-15
 ---
 
 ## Summary
@@ -9,7 +9,7 @@ Use MariaDB as the source of truth. Keep schema normalized for participants, tea
 
 ## Core Entities
 
-- **people**: PID, name, email/phone, demographics, status
+- **people**: PID, name, email/phone, demographics, status, division
 - **admins**: auth user id, role, status
 - **admin_roles**: role name and permissions (optional if using enum)
 - **teams**: TnmtID, team name
@@ -18,6 +18,7 @@ Use MariaDB as the source of truth. Keep schema normalized for participants, tea
 - **scores**: per-event per-game scores
 - **tournaments**: tournament metadata
 - **audit_logs**: admin actions and changes
+- **portal_settings**: key-value configuration (visibility toggles)
 
 ## Relationships (high level)
 
@@ -89,6 +90,10 @@ create table if not exists people (
   did text,
   team_captain boolean default false,
   team_order int,
+  optional_events tinyint(1) not null default 0,
+  optional_best_3_of_9 tinyint(1) not null default 0,
+  optional_scratch tinyint(1) not null default 0,
+  optional_all_events_hdcp tinyint(1) not null default 0,
   created_at timestamp default current_timestamp,
   updated_at timestamp default current_timestamp
 );
@@ -150,6 +155,12 @@ create table if not exists admin_password_resets (
   expires_at timestamp not null,
   used_at timestamp,
   created_at timestamp default current_timestamp
+);
+
+create table if not exists portal_settings (
+  setting_key varchar(128) primary key,
+  setting_value text not null,
+  updated_at timestamp default current_timestamp on update current_timestamp
 );
 ```
 
@@ -219,6 +230,19 @@ The CSV lane import (`importLanesCsv.js`) applies the same principle using the `
 
 The CSV score import (`importScoresCsv.js`) uses both approaches: `wouldClobberExisting` at the application level to skip unchanged rows, and `COALESCE(VALUES(col), col)` in the SQL for `game1`, `game2`, `game3`. The score import never touches `lane`, `entering_avg`, or `handicap` columns.
 
+## People Table: Division
+
+`people.division` is derived from entering average during XML import and updated on every import.
+
+Division rules:
+- A: entering average >= 208
+- B: entering average 190-207
+- C: entering average 170-189
+- D: entering average 150-169
+- E: entering average <= 149
+
+Migration script: `backend/scripts/migrations/add-division-column.sh`
+
 ### XML Import: Handling Attributes
 
 IGBO XML includes attributes on the `BOOK_AVERAGE` element:
@@ -242,6 +266,72 @@ const bookAvg = toNumber(person.BOOK_AVERAGE?.['#text'] ?? person.BOOK_AVERAGE);
 ```
 
 This handles both attribute-based and simple text content.
+
+## People Table: Optional Events Flags
+
+### Overview
+
+The `people` table includes opt-in flags for optional bowling competitions. Participants opt into each event separately; the flags are imported via CSV (not XML).
+
+### Columns
+
+| Column | Type | Description |
+|---|---|---|
+| `optional_events` | `tinyint(1)` | Legacy flag -- 1 if the participant has opted into any optional event |
+| `optional_best_3_of_9` | `tinyint(1)` | Best of 3 of 9 opt-in (top 3 handicapped games across all 9) |
+| `optional_scratch` | `tinyint(1)` | Optional Scratch opt-in (total scratch by division) |
+| `optional_all_events_hdcp` | `tinyint(1)` | All Events Handicapped opt-in (total of all 9 games with handicap) |
+
+All columns default to `0`. The `optional_events` column is set to `1` if any of the three individual flags is `1`.
+
+### CSV Import
+
+The optional events CSV import uses **replace-all semantics**: participants not present in the CSV have all flags set to `0`. This differs from the score and lane imports, which use null-preservation (COALESCE).
+
+**Matching:** Primary match by EID (mapped to `people.pid`). Falls back to normalized name match if the EID is not found and the name matches exactly one participant.
+
+**Import logic:** `src/utils/portal/importOptionalEventsCsv.js`
+
+**API route:** `POST /api/portal/admin/optional-events/import` (supports preview and import modes)
+
+### Migration
+
+Migration script: `backend/scripts/migrations/add-optional-events-column.sh`
+
+The migration adds four columns to `people` after the existing `scratch_masters` column. It is idempotent and uses `ADD COLUMN IF NOT EXISTS` for the individual opt-in columns.
+
+## Portal Settings Table
+
+### Overview
+
+The `portal_settings` table is a generic key-value store for portal configuration. It is auto-created on first use by `ensurePortalSettingsTable()` in `src/utils/portal/portal-settings-db.js`.
+
+### Schema
+
+```sql
+create table if not exists portal_settings (
+  setting_key varchar(128) primary key,
+  setting_value text not null,
+  updated_at timestamp default current_timestamp on update current_timestamp
+);
+```
+
+### Current Settings
+
+| Key | Values | Description |
+|---|---|---|
+| `participants_can_view_scores` | `"0"` / `"1"` | Controls participant access to the scores page |
+| `participants_can_view_scratch_masters` | `"0"` / `"1"` | Controls participant access to Scratch Masters |
+| `participants_can_view_optional_events` | `"0"` / `"1"` | Controls participant access to Optional Events |
+
+All visibility settings default to `"0"` (hidden from participants) when not present in the table. Admins always have access regardless of the toggle state.
+
+### Implementation
+
+- **DB access:** `src/utils/portal/portal-settings-db.js` -- get/set helpers for each visibility setting
+- **API handler factory:** `src/utils/portal/visibility-toggle-route.js` -- `createVisibilityToggleHandler()` creates a `GET`/`PUT` handler for any visibility setting
+- **React hook:** `src/hooks/portal/useVisibilityToggle.js` -- optimistic UI toggle with rollback on error
+- **SSR guard:** `requireSessionWithVisibilitySSR()` in `src/utils/portal/ssr-helpers.js` -- redirects participants when a visibility toggle is off
 
 ## Scores Table: Lane Assignments
 

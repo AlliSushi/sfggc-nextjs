@@ -1,6 +1,6 @@
 ---
 title: SFGGC Portal
-updated: 2026-01-29
+updated: 2026-02-15
 ---
 
 # SFGGC Tournament Portal
@@ -21,6 +21,8 @@ Portal routes:
 - `http://localhost:3000/portal`
 - `http://localhost:3000/portal/admin`
 - `http://localhost:3000/portal/participant`
+- `http://localhost:3000/portal/admin/optional-events`
+- `http://localhost:3000/portal/admin/scratch-masters`
 
 The participant prototype pages still use CSV data from `portal_docs/sample_data/`. Admin edit flows use the local MariaDB database.
 
@@ -61,6 +63,14 @@ from `.env.local` automatically:
 bash scripts/dev/init-portal-db.sh
 ```
 
+`init-portal-db.sh` now runs the base schema and then executes all migration scripts in
+`backend/scripts/migrations/` to bring existing local databases up to current shape.
+If you only want to run migrations, use:
+
+```bash
+bash scripts/dev/run-portal-migrations.sh
+```
+
 Import IGBO registration XML (ensure `PORTAL_DATABASE_URL` is set in the environment or in `.env.local`):
 
 ```bash
@@ -71,6 +81,27 @@ You can import XML from the admin dashboard using the Import XML button.
 
 If the admin dashboard shows no data, run the XML import or create a participant
 via the admin bootstrap script.
+
+## Optional Events
+
+Optional Events are additional bowling competitions beyond the standard team/doubles/singles events. Admins manage opt-in flags and view standings from `/portal/admin/optional-events`.
+
+**Three event types:**
+- **Best of 3 of 9** -- Top 3 handicapped games across all 9 games (3 per event x 3 events)
+- **All Events Handicapped** -- Total of all 9 games with handicap applied
+- **Optional Scratch (by Division)** -- Total scratch scores across all 9 games, organized by division (A through E)
+
+**Workflow:**
+1. Import a CSV with opt-in flags (see [CSV_SCORE_FORMAT.md](CSV_SCORE_FORMAT.md#optional-events-csv) for the file format)
+2. Standings are calculated automatically from existing game scores in the `scores` table
+3. Toggle participant visibility on/off from the admin page
+
+**Database requirements:**
+- Migration `add-optional-events-column.sh` adds opt-in columns to the `people` table
+- The `portal_settings` table stores visibility toggles (auto-created on first use)
+- Both are applied automatically by `init-portal-db.sh` and during production deployment
+
+**Visibility toggle:** When disabled, participants cannot see the Optional Events page. Admins always have access regardless of the toggle state.
 
 ## Backend (local)
 
@@ -142,6 +173,9 @@ DB-backed tests:
 ## Deployment
 
 The portal UI and backend deploy together as a Next.js application. See [PORTAL_DEPLOYMENT.md](../deploy_docs/PORTAL_DEPLOYMENT.md) for server setup, environment variables, and production deployment steps.
+
+Portal deployments run migrations automatically unless deployment is explicitly started
+with `--skip-migrations`.
 
 ## Documentation
 

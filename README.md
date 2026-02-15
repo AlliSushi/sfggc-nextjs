@@ -65,6 +65,14 @@ The repository also includes a tournament portal for admin and participant acces
 - **Setup guide**: [`portal_docs/PORTAL_SETUP.md`](portal_docs/PORTAL_SETUP.md)
 - **Portal deployment**: [`deploy_docs/PORTAL_DEPLOYMENT.md`](deploy_docs/PORTAL_DEPLOYMENT.md)
 
+### Portal migrations (developer workflow)
+
+- Portal deploys run migrations automatically from `backend/scripts/migrations/`.
+- Local schema setup now also runs all portal migrations:
+  - `bash scripts/dev/init-portal-db.sh`
+- Existing workspaces: pull latest code and re-run `bash scripts/dev/init-portal-db.sh` (or run only migrations with `bash scripts/dev/run-portal-migrations.sh`).
+- First-time workspaces: after creating `.env.local`, run `bash scripts/dev/init-portal-db.sh`; it initializes schema and applies migrations in one flow.
+
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 

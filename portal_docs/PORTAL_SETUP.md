@@ -1,6 +1,6 @@
 ---
 title: Portal Setup Guide
-updated: 2026-01-29
+updated: 2026-02-15
 ---
 
 # Portal Setup Guide
@@ -19,6 +19,8 @@ This guide mirrors the main site setup instructions but focuses on portal-specif
    - `http://localhost:3000/portal`
    - `http://localhost:3000/portal/admin`
    - `http://localhost:3000/portal/participant`
+   - `http://localhost:3000/portal/admin/optional-events` (admin only)
+   - `http://localhost:3000/portal/admin/scratch-masters` (admin only)
 
 The participant prototype pages still use CSV data from `portal_docs/sample_data/`. Admin edit flows use the local MariaDB database.
 
@@ -53,6 +55,22 @@ Initialize the schema (creates DB if missing). The script loads `PORTAL_DATABASE
 
 ```bash
 bash scripts/dev/init-portal-db.sh
+```
+
+`init-portal-db.sh` applies both:
+- the baseline schema in `portal_docs/sql/portal_schema.sql`
+- all migrations in `backend/scripts/migrations/` (including optional events columns and portal settings)
+
+For existing workspaces, pull latest code and rerun:
+
+```bash
+bash scripts/dev/init-portal-db.sh
+```
+
+To run only migrations:
+
+```bash
+bash scripts/dev/run-portal-migrations.sh
 ```
 
 Import IGBO registration XML (ensure `PORTAL_DATABASE_URL` is set, e.g. in `.env.local`):
@@ -141,6 +159,8 @@ If you encounter server permission issues, follow the steps in:
 
 The portal backend runs as part of the Next.js application. See [PORTAL_DEPLOYMENT.md](../deploy_docs/PORTAL_DEPLOYMENT.md) for production deployment steps including database setup, SMTP configuration, and process management.
 
+Production deploy runs migrations automatically (unless `--skip-migrations` is used).
+
 ## Troubleshooting
 
 - If portal routes 404, confirm files exist under `src/pages/portal/`.
@@ -148,3 +168,5 @@ The portal backend runs as part of the Next.js application. See [PORTAL_DEPLOYME
 - If MariaDB is not running, run `bash scripts/dev/start-mariadb.sh`.
 - **Access denied for user 'root'@'localhost' (ERROR 1698)**: Use `mysql://root@localhost:3306/...` in `.env.local`; the init script and app use the socket and your macOS user. If your socket path is non-standard, set `MYSQL_UNIX_SOCKET`.
 - If Homebrew services fail (e.g. home on external drive), run `brew services run mariadb` in a separate terminal, or start `mysqld` as shown in the script output.
+- Optional Events page shows no data: ensure game scores exist in the `scores` table (import scores via CSV first) and that at least one participant has opt-in flags set (import the optional events CSV).
+- Optional Events page not accessible for participants: check the visibility toggle at `/portal/admin/optional-events` -- it defaults to off.

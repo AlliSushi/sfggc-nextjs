@@ -257,6 +257,18 @@ This affects any page using `getServerSideProps` that fetches data from internal
 2. If JS files return 404, the `^~` modifier is missing from portal location blocks
 3. See [Critical Nginx Configuration Requirements](#critical-nginx-configuration-requirements) above
 
+**Static page returns 403 Forbidden (e.g., `/results`):**
+
+This happens when a static page name collides with a directory — for example, `results.html` (the Next.js page) and `results/` (a folder containing result PDFs). Nginx finds the directory first and tries to list it, which is denied.
+
+**Fix (in `backend/config/vhost.txt`):**
+1. Add trailing slash rewrite inside `location /`: `rewrite ^/(.+)/$ /$1 permanent;`
+2. Ensure `try_files` checks `$uri.html` before `$uri/`: `try_files $uri $uri.html $uri/ /index.html;`
+
+This serves the `.html` page instead of attempting a directory listing. PDFs inside the directory (e.g., `/results/2024/team.pdf`) are unaffected — they match `$uri` as regular files.
+
+---
+
 **Configuration rejected by ISP panel:**
 1. Check for syntax errors (missing semicolons, braces)
 2. Preserve CloudPanel placeholders: `{{root}}`, `{{ssl_certificate}}`, etc.

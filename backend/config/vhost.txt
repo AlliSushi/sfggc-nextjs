@@ -137,7 +137,12 @@ server {
   # from the "out" directory deployed via rsync.
 
   location / {
-    try_files $uri $uri/ $uri.html /index.html;
+    # Strip trailing slash so /results/ becomes /results, which then
+    # resolves to results.html via try_files (prevents 403 on directories
+    # that share a name with a static page, e.g. results/ PDFs)
+    rewrite ^/(.+)/$ /$1 permanent;
+
+    try_files $uri $uri.html $uri/ /index.html;
   }
 
   # Cache static assets (images, fonts, CSS, JS)

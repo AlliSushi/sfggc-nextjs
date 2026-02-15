@@ -427,6 +427,33 @@ upstream portal_backend {
 - `proxy_http_version 1.1;`
 - `proxy_set_header Connection "";` (NOT `"upgrade"` -- that forces per-request upgrade and defeats keepalive)
 
+### Nginx try_files Ordering and Trailing Slash Rewrite
+
+**Problem:** Static pages that share a name with a directory (e.g., `results.html` and `results/` containing PDFs) return 403 Forbidden. Nginx finds the directory before the `.html` file and tries to serve a directory listing, which is denied.
+
+**Fix (in `backend/config/vhost.txt`):**
+```nginx
+location / {
+    # Strip trailing slash — /results/ becomes /results, preventing 403
+    # on directories that collide with static page names
+    rewrite ^/(.+)/$ /$1 permanent;
+
+    # Check .html BEFORE directory to serve results.html instead of results/
+    try_files $uri $uri.html $uri/ /index.html;
+}
+```
+
+**Two rules work together:**
+
+| Rule | Purpose |
+|---|---|
+| `rewrite ^/(.+)/$ /$1 permanent` | Strips trailing slash (`/results/` → `/results`) so the `.html` check can match |
+| `$uri.html` before `$uri/` in try_files | Serves `results.html` instead of attempting directory listing on `results/` |
+
+**Why both are needed:** Without the rewrite, a cached or manually-typed `/results/` bypasses the try_files `.html` check (there's no `/results/.html`). Without the try_files reorder, `/results` without trailing slash would still try the directory first.
+
+**Safe for PDFs:** Direct file requests like `/results/2024/team.pdf` match `$uri` as a regular file and are served immediately.
+
 ### Nginx Gzip and next.config.js
 
 When nginx handles gzip compression, set `compress: false` in `next.config.js` to avoid double-compression. Current config already does this -- do not re-enable.
