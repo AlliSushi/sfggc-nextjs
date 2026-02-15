@@ -397,7 +397,7 @@ const AdminDetailPage = ({ admin: initialAdmin, adminRole, adminEmail, superAdmi
 };
 
 export const getServerSideProps = async ({ params, req }) => {
-  const ssrResult = requireSuperAdminSSR(req, (payload) => ({
+  const ssrResult = await requireSuperAdminSSR(req, (payload) => ({
     adminEmail: payload.email,
   }));
   if (ssrResult.redirect) return ssrResult;

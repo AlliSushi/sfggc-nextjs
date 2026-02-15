@@ -1,4 +1,5 @@
 import { COOKIE_ADMIN, parseCookies, verifyToken } from "./session.js";
+import { getAuthSessions, checkSessionRevocation } from "./auth-guards.js";
 
 /**
  * Returns the base URL for internal SSR API fetches.
@@ -30,12 +31,13 @@ const ADMIN_LOGIN_PATH = "/portal/admin/";
  *   additional props to merge into the page props.
  * @returns {{ props: object } | { redirect: object }}
  */
-const requireSuperAdminSSR = (req, extraPropsFromPayload) => {
+const requireSuperAdminSSR = async (req, extraPropsFromPayload) => {
   try {
     const cookies = parseCookies(req.headers.cookie || "");
     const token = cookies[COOKIE_ADMIN];
     const payload = verifyToken(token);
-    if (!payload || payload.role !== "super-admin") {
+    const isValidSession = payload ? await checkSessionRevocation(payload) : false;
+    if (!payload || !isValidSession || payload.role !== "super-admin") {
       return {
         redirect: { destination: ADMIN_DASHBOARD_PATH, permanent: false },
       };
@@ -60,12 +62,13 @@ const requireSuperAdminSSR = (req, extraPropsFromPayload) => {
  *   additional props to merge into the page props.
  * @returns {{ props: object } | { redirect: object }}
  */
-const requireAdminSSR = (req, extraPropsFromPayload) => {
+const requireAdminSSR = async (req, extraPropsFromPayload) => {
   try {
     const cookies = parseCookies(req.headers.cookie || "");
     const token = cookies[COOKIE_ADMIN];
     const payload = verifyToken(token);
-    if (!payload) {
+    const isValidSession = payload ? await checkSessionRevocation(payload) : false;
+    if (!payload || !isValidSession) {
       return {
         redirect: { destination: ADMIN_LOGIN_PATH, permanent: false },
       };
@@ -81,5 +84,39 @@ const requireAdminSSR = (req, extraPropsFromPayload) => {
   }
 };
 
+const requireSessionWithVisibilitySSR = async ({
+  req,
+  getParticipantVisibility,
+  redirectTo = "/portal/",
+  visibilityPropName = "participantsCanView",
+}) => {
+  const sessions = getAuthSessions(req);
+  let { adminSession } = sessions;
+  const { participantSession } = sessions;
+  if (adminSession && !(await checkSessionRevocation(adminSession))) {
+    adminSession = null;
+  }
+  const participantVisibility = await getParticipantVisibility();
+
+  if (!adminSession && !participantSession) {
+    return { redirect: { destination: redirectTo, permanent: false } };
+  }
+
+  if (!adminSession && participantSession && !participantVisibility) {
+    return { redirect: { destination: redirectTo, permanent: false } };
+  }
+
+  return {
+    props: {
+      [visibilityPropName]: participantVisibility,
+    },
+  };
+};
+
 export { buildBaseUrl };
-export { requireSuperAdminSSR, requireAdminSSR, ADMIN_DASHBOARD_PATH };
+export {
+  requireSuperAdminSSR,
+  requireAdminSSR,
+  requireSessionWithVisibilitySSR,
+  ADMIN_DASHBOARD_PATH,
+};

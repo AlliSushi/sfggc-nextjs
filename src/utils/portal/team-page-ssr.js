@@ -1,5 +1,6 @@
 import { getAuthSessions } from "./auth-guards.js";
 import { buildBaseUrl } from "./ssr-helpers.js";
+import { getScoresVisibleToParticipants } from "./portal-settings-db.js";
 
 const buildTeamPageProps = async ({ params, req, fetcher = fetch }) => {
   const { adminSession, participantSession } = getAuthSessions(req);
@@ -12,7 +13,7 @@ const buildTeamPageProps = async ({ params, req, fetcher = fetch }) => {
     };
   }
 
-  const baseUrl = buildBaseUrl(req);
+  const baseUrl = buildBaseUrl();
 
   const response = await fetcher(
     `${baseUrl}/api/portal/teams/${encodeURIComponent(params.teamSlug)}`,
@@ -36,10 +37,12 @@ const buildTeamPageProps = async ({ params, req, fetcher = fetch }) => {
   }
 
   const data = await response.json();
+  const scoresVisibleToParticipants = await getScoresVisibleToParticipants();
   return {
     props: {
       team: data.team,
       roster: data.roster,
+      scoresVisibleToParticipants,
     },
   };
 };

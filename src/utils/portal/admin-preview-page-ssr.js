@@ -12,7 +12,7 @@ const buildAdminPreviewPageProps = async ({ params, req, fetcher = fetch }) => {
     };
   }
 
-  const baseUrl = buildBaseUrl(req);
+  const baseUrl = buildBaseUrl();
 
   const response = await fetcher(
     `${baseUrl}/api/portal/participants/${encodeURIComponent(params.pid)}`,

@@ -1,8 +1,11 @@
 const ADMIN_LOGIN = "/portal/";
 const PARTICIPANT_LOGIN = "/portal/participant";
 
-const portalFetch = async (url, options) => {
+const portalFetch = async (url, options, behavior = {}) => {
   const response = await fetch(url, options);
+  if (behavior.allowAuthErrorResponses) {
+    return response;
+  }
   if (response.status === 401 || response.status === 403) {
     const currentPath = window.location.pathname || "";
     const isParticipantPage = currentPath.startsWith("/portal/participant");

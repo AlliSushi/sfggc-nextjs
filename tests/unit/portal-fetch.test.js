@@ -135,3 +135,20 @@ test(
     assert.equal(assignedHref, undefined, "Should not redirect on 500");
   }
 );
+
+test(
+  "Given a 401 response with allowAuthErrorResponses option, when portalFetch is called, then it returns the response without redirect",
+  async () => {
+    setupLocationMock("/portal/admin/dashboard");
+    mockFetch(401, { error: "Unauthorized" });
+
+    const response = await portalFetch(
+      "/api/portal/admin/optional-events/import",
+      { method: "POST" },
+      { allowAuthErrorResponses: true }
+    );
+
+    assert.equal(response.status, 401);
+    assert.equal(assignedHref, undefined, "Should not redirect when auth errors are explicitly allowed");
+  }
+);

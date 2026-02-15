@@ -48,54 +48,42 @@ const checkSessionRevocation = async (adminSession) => {
   return true;
 };
 
-const requireAdmin = async (req, res) => {
-  const { adminSession } = getAuthSessions(req);
+const validateAdminSession = async (adminSession, res) => {
   if (!adminSession) {
     unauthorized(res);
     return null;
   }
-
-  // Check if session was revoked
   const isValid = await checkSessionRevocation(adminSession);
   if (!isValid) {
     unauthorized(res);
     return null;
   }
-
   return adminSession;
+};
+
+const requireAdmin = async (req, res) => {
+  const { adminSession } = getAuthSessions(req);
+  return validateAdminSession(adminSession, res);
 };
 
 const requireSuperAdmin = async (req, res) => {
   const { adminSession } = getAuthSessions(req);
-  if (!adminSession) {
-    unauthorized(res);
-    return null;
-  }
+  const validatedAdmin = await validateAdminSession(adminSession, res);
+  if (!validatedAdmin) return null;
 
-  // Check if session was revoked
-  const isValid = await checkSessionRevocation(adminSession);
-  if (!isValid) {
-    unauthorized(res);
-    return null;
-  }
-
-  if (adminSession.role !== ROLE_SUPER_ADMIN) {
+  if (validatedAdmin.role !== ROLE_SUPER_ADMIN) {
     forbidden(res);
     return null;
   }
-  return adminSession;
+  return validatedAdmin;
 };
 
 const requireParticipantMatchOrAdmin = async (req, res, pid) => {
   const { adminSession, participantSession, hasSession } = getAuthSessions(req);
 
   if (adminSession) {
-    // Check if admin session was revoked
-    const isValid = await checkSessionRevocation(adminSession);
-    if (!isValid) {
-      unauthorized(res);
-      return null;
-    }
+    const validatedAdmin = await validateAdminSession(adminSession, res);
+    if (!validatedAdmin) return null;
     return { adminSession, participantSession };
   }
 
@@ -112,4 +100,76 @@ const requireParticipantMatchOrAdmin = async (req, res, pid) => {
   return null;
 };
 
-export { getAuthSessions, requireAdmin, requireSuperAdmin, requireParticipantMatchOrAdmin };
+const requireParticipantTeamMemberOrAdmin = async (req, res, pid) => {
+  const { adminSession, participantSession, hasSession } = getAuthSessions(req);
+
+  if (adminSession) {
+    const validatedAdmin = await validateAdminSession(adminSession, res);
+    if (!validatedAdmin) return null;
+    return { adminSession, participantSession };
+  }
+
+  if (participantSession) {
+    if (participantSession.pid === pid) {
+      return { adminSession: null, participantSession };
+    }
+
+    const { rows } = await query(
+      `
+      select pid, tnmt_id
+      from people
+      where pid in (?, ?)
+      `,
+      [participantSession.pid, pid]
+    );
+
+    const byPid = new Map(rows.map((row) => [row.pid, row]));
+    const viewer = byPid.get(participantSession.pid);
+    const target = byPid.get(pid);
+
+    if (
+      viewer &&
+      target &&
+      viewer.tnmt_id &&
+      target.tnmt_id &&
+      viewer.tnmt_id === target.tnmt_id
+    ) {
+      return { adminSession: null, participantSession };
+    }
+  }
+
+  if (hasSession) {
+    forbidden(res);
+    return null;
+  }
+
+  unauthorized(res);
+  return null;
+};
+
+const requireAnySession = async (req, res) => {
+  const { adminSession, participantSession } = getAuthSessions(req);
+
+  if (adminSession) {
+    const validatedAdmin = await validateAdminSession(adminSession, res);
+    if (!validatedAdmin) return null;
+  }
+
+  if (!adminSession && !participantSession) {
+    unauthorized(res);
+    return null;
+  }
+
+  return { adminSession, participantSession };
+};
+
+export {
+  getAuthSessions,
+  checkSessionRevocation,
+  requireAdmin,
+  requireSuperAdmin,
+  requireParticipantMatchOrAdmin,
+  requireParticipantTeamMemberOrAdmin,
+  requireAnySession,
+  validateAdminSession,
+};
