@@ -347,6 +347,38 @@ ssh_command "cd $PATH && set -a && source .env.local 2>/dev/null && set +a && no
 \""
 ```
 
+## Image Optimization in Deploy Pipeline
+
+**Problem:** `next.config.js` sets `images: { unoptimized: true }` for static export, so Next.js does not optimize images. Oversized source images ship at full resolution, increasing page load times.
+
+**Solution:** `deploy_scripts/lib/optimize-images.sh` auto-resizes images wider than `MAX_IMAGE_WIDTH=800` using macOS `sips` (no external dependencies).
+
+**Pipeline integration:** Called from `build_static()` in `build.sh` **before** `npm run build`:
+```
+build_static() → optimize_images() → npm run build
+```
+
+**Key details:**
+- Uses `sips --resampleWidth 800` for resizing (macOS built-in)
+- `get_file_size()` helper: cross-platform (`stat -f%z` macOS, `stat -c%s` Linux)
+- Respects `DRY_RUN` flag (logs what would change without modifying files)
+- Scans `src/images/` recursively for `.jpg`, `.jpeg`, `.png` files
+- Modifies source files in place (git tracks the change)
+
+**Test:** `tests/unit/optimize-images.test.js` (9 BDD tests including dry-run, recursive, mixed-size scenarios)
+
+## Server-Mode Config Template
+
+**Problem:** Three places generated `next.config.js` for server mode using inline heredocs. Template drift caused production incident where `compress: false` was missing from some templates.
+
+**Solution:** Extracted shared `write_server_mode_config()` function in `deploy_scripts/lib/build.sh`. Both `build_portal_local()` and `ensure_server_mode_config()` call this single function.
+
+**Note:** `deploy_scripts/lib/deploy-portal.sh` has a third instance that writes via SSH to the remote server -- left as inline heredoc since it cannot call the local function.
+
+**Rule:** When modifying the server-mode `next.config.js` template, update `write_server_mode_config()` in `build.sh`. Verify the remote template in `deploy-portal.sh` matches.
+
+**Test:** `tests/unit/deployment/config-management.test.js`
+
 ## Deployment Script Structure
 
 **Entry point:** `deploy_scripts/deploy.sh`
@@ -356,7 +388,8 @@ ssh_command "cd $PATH && set -a && source .env.local 2>/dev/null && set +a && no
 - `lib/config.sh` - Configuration loading
 - `lib/ssh.sh` - SSH connection helpers
 - `lib/validation.sh` - Validation checks
-- `lib/build.sh` - Build process
+- `lib/build.sh` - Build process (`write_server_mode_config()` single source of truth)
+- `lib/optimize-images.sh` - Pre-build image resizing (macOS `sips`, `MAX_IMAGE_WIDTH=800`)
 - `lib/deploy-static.sh` - Static site deployment (rsync with `--exclude='portal-app'`)
 - `lib/deploy-portal.sh` - Portal deployment (credentials, database, admin)
 - `lib/deploy-migrations.sh` - Database migration runner (depends on `ssh -n` in ssh.sh)
@@ -466,6 +499,8 @@ When nginx handles gzip compression, set `compress: false` in `next.config.js` t
 ## Key Files Reference
 
 - `deploy_scripts/deploy.sh` - Main deployment script
+- `deploy_scripts/lib/build.sh` - Build orchestration, `write_server_mode_config()` template
+- `deploy_scripts/lib/optimize-images.sh` - Pre-build image resizing
 - `deploy_scripts/lib/deploy-portal.sh` - Portal-specific logic, credential handling
 - `.deployrc.example` - Production configuration template
 - `deploy_docs/DEPLOYMENT.md` - User-facing deployment guide

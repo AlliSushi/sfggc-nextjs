@@ -123,6 +123,7 @@ The script will:
 - Check for Node.js and npm
 - Install dependencies if needed (`npm install`)
 - Validate `next.config.js` configuration
+- Resize oversized source images (wider than 800px) using macOS `sips`
 - Build the static site (`npm run build`)
 - Validate the build output
 - Display build statistics

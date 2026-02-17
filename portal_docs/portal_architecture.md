@@ -1,6 +1,6 @@
 ---
 title: Portal Architecture
-updated: 2026-02-13
+updated: 2026-02-16
 ---
 
 ## Summary
@@ -150,6 +150,11 @@ Acceptance criteria (BDD-style):
 - `GET /api/portal/admin/possible-issues`
 - `POST /api/portal/admin/import-scores`
 - `GET /api/portal/teams/:teamSlug`
+- `GET /api/portal/scores`
+- `GET /api/portal/admin/optional-events`
+- `GET|PUT /api/portal/admin/scores/visibility`
+- `GET|PUT /api/portal/admin/optional-events/visibility`
+- `GET|PUT /api/portal/admin/scratch-masters/visibility`
 
 ## Proposed API Contracts (initial)
 
@@ -697,6 +702,56 @@ The section is hidden when lane coverage is below 50% (i.e., fewer than half of 
 - `tests/unit/possible-issues-utils.test.js`
 - `tests/unit/possible-issues-route.test.js`
 - `tests/frontend/dashboard-possible-issues.test.js`
+
+## Visibility Toggle System
+
+### Overview
+
+Admins control whether participants and public visitors can access specific portal features (scores, optional events, scratch masters). Each feature has a visibility toggle managed through the `portal_settings` table.
+
+### Visibility Toggle API
+
+All visibility endpoints use a shared handler factory (`createVisibilityToggleHandler` in `src/utils/portal/visibility-toggle-route.js`).
+
+**Endpoints:**
+
+| Endpoint | GET (public) | PUT (admin only) |
+|---|---|---|
+| `/api/portal/admin/scores/visibility` | `{ participantsCanViewScores: boolean }` | Toggle scores visibility |
+| `/api/portal/admin/optional-events/visibility` | `{ participantsCanViewOptionalEvents: boolean }` | Toggle optional events visibility |
+| `/api/portal/admin/scratch-masters/visibility` | `{ participantsCanViewScratchMasters: boolean }` | Toggle scratch masters visibility |
+
+**GET behavior:** Returns the current visibility state. No authentication required -- this allows public pages to check feature availability without a session.
+
+**PUT behavior:** Requires admin session. Accepts `{ <valueKey>: boolean }` in the request body. Logs the action via `logAdminAction`.
+
+### Results Page Public Links
+
+The public results page (`src/pages/results.js`) conditionally displays links to portal score pages based on visibility toggle state:
+
+- **"View Overall Standings"** link appears when `participantsCanViewScores` is `true`
+- **"View Optional Events"** link appears when `participantsCanViewOptionalEvents` is `true`
+
+Both links include a `?from=/results` query parameter so users can navigate back to the results page.
+
+Visibility is checked client-side via `fetch()` calls to the public GET endpoints on page load. Links are hidden by default and appear only when the respective toggle is enabled.
+
+### Files
+
+**Backend:**
+- `src/utils/portal/visibility-toggle-route.js` -- Handler factory for visibility toggle endpoints
+- `src/pages/api/portal/admin/scores/visibility.js` -- Scores visibility endpoint
+- `src/pages/api/portal/admin/optional-events/visibility.js` -- Optional events visibility endpoint
+- `src/pages/api/portal/admin/scratch-masters/visibility.js` -- Scratch masters visibility endpoint
+- `src/utils/portal/portal-settings-db.js` -- Database get/set helpers for portal settings
+
+**Frontend:**
+- `src/pages/results.js` -- Results page with conditional links
+- `src/components/Results/Results.js` -- Results component receiving visibility props
+- `src/hooks/portal/useVisibilityToggle.js` -- Admin toggle hook with optimistic UI
+
+**Test Coverage:**
+- `tests/frontend/results-page-public-links.test.js`
 
 ## Force Password Change
 

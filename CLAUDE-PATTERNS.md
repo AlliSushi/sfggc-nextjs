@@ -706,6 +706,86 @@ const nextConfig = {
 
 **Current state:** Already configured. See `CLAUDE-DEPLOYMENT.md#Nginx Gzip and next.config.js`.
 
+## Visibility Toggle Route Pattern
+
+**Problem:** Multiple API routes need identical GET (public) / PUT (admin-only) toggle behavior for boolean settings.
+
+**Solution:** Factory function `createVisibilityToggleHandler` produces a handler from a config object.
+
+```javascript
+import { createVisibilityToggleHandler } from "../utils/portal/visibility-toggle-route.js";
+
+export default createVisibilityToggleHandler({
+  valueKey: "participantsCanViewScores",       // JSON key in request/response
+  getVisibility: getScoresVisibleToParticipants, // async () => boolean
+  setVisibility: setScoresVisibleToParticipants, // async (boolean) => void
+  action: "set_scores_visibility",              // audit log action slug
+});
+```
+
+**Behavior:**
+- `GET` -- public, no auth required. Returns `{ [valueKey]: boolean }`. Used by static pages via client-side fetch.
+- `PUT` -- admin-only (`requireAdmin`). Expects `{ [valueKey]: boolean }` in body. Logs to audit.
+
+**Files:**
+- Factory: `src/utils/portal/visibility-toggle-route.js`
+- Consumers: `src/pages/api/portal/admin/scores/visibility.js`, `src/pages/api/portal/admin/optional-events/visibility.js`
+
+## Client-Side Visibility Fetching on Static Pages
+
+**Problem:** Static export pages (`output: 'export'`) cannot use `getServerSideProps`. Dynamic content visibility must be determined at runtime.
+
+**Pattern:** Use `useEffect` + `fetch` to query public visibility endpoints, then conditionally render UI elements.
+
+```javascript
+const [showStandingsLink, setShowStandingsLink] = useState(false);
+
+useEffect(() => {
+  fetch("/api/portal/admin/scores/visibility")
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (data?.participantsCanViewScores) setShowStandingsLink(true);
+    })
+    .catch(() => {});  // Silently fail -- links stay hidden
+}, []);
+```
+
+**Key rules:**
+- Default state is `false` (hidden) -- links only appear after successful API response
+- `.catch(() => {})` prevents unhandled rejection when API is unreachable
+- Visibility endpoints must allow unauthenticated GET (see Visibility Toggle Route Pattern above)
+
+**Files:**
+- Page: `src/pages/results.js`
+- Component: `src/components/Results/Results.js` (receives `showStandingsLink`, `showOptionalEventsLink` as props)
+- Test: `tests/frontend/results-page-public-links.test.js`
+
+## Component Data Array Pattern
+
+**Problem:** Components with repeated card/item blocks contain duplicated JSX.
+
+**Pattern:** Define data as an array of objects, render with `.map()`.
+
+```javascript
+const winners = [
+  { image: divisionAImage, name: 'TJ Pettit', division: 'A' },
+  { image: divisionBImage, name: 'Gary McNamara', division: 'B' },
+];
+
+// In JSX:
+{winners.map(({ image, name, division }) => (
+  <div key={division}>
+    <Image src={image} alt={name} />
+    <p>{name}</p>
+    <p>Division {division}</p>
+  </div>
+))}
+```
+
+**Rule:** When a component renders 3+ structurally identical items, extract data into an array and use `.map()`.
+
+**Example:** `src/components/ScrMstWinners/ScrMstWinners.js`
+
 ## Performance Tradeoff Documentation
 
 **Pattern:** Document deliberate performance tradeoffs in comments and CLAUDE.md.

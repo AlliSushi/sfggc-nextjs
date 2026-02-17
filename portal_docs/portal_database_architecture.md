@@ -1,6 +1,6 @@
 ---
 title: Portal Database Architecture
-updated: 2026-02-15
+updated: 2026-02-16
 ---
 
 ## Summary
@@ -325,6 +325,8 @@ create table if not exists portal_settings (
 | `participants_can_view_optional_events` | `"0"` / `"1"` | Controls participant access to Optional Events |
 
 All visibility settings default to `"0"` (hidden from participants) when not present in the table. Admins always have access regardless of the toggle state.
+
+Each visibility setting has a corresponding API endpoint (e.g., `/api/portal/admin/scores/visibility`). The GET method is public (no authentication required), allowing the static results page to check toggle state without a session. The PUT method requires admin authentication.
 
 ### Implementation
 

@@ -139,11 +139,12 @@ Deploys the public-facing website (7 static pages).
 ```
 
 **What it does:**
-1. Builds static site (`npm run build` with `output: 'export'`)
-2. Creates backup of existing deployment on server
-3. Syncs files via rsync with `--delete` flag (excludes `portal-app/` to protect portal deployment)
-4. Generates `.htaccess` for Apache optimization
-5. Verifies deployment
+1. Resizes oversized source images (wider than 800px) using macOS `sips`
+2. Builds static site (`npm run build` with `output: 'export'`)
+3. Creates backup of existing deployment on server
+4. Syncs files via rsync with `--delete` flag (excludes `portal-app/` to protect portal deployment)
+5. Generates `.htaccess` for Apache optimization
+6. Verifies deployment
 
 **Requirements:**
 - `out/` directory with built static files (auto-built if missing)

@@ -132,6 +132,7 @@ This is a monorepo combining two distinct applications in one Next.js project:
    - Static marketing pages
    - Tournament information and rules
    - No authentication required
+   - Results page fetches visibility flags client-side (cannot use SSR in static export). See `CLAUDE-PATTERNS.md#Client-Side Visibility Fetching on Static Pages`
 
 2. **Portal System** (`src/pages/portal/`, `src/pages/api/portal/`)
    - Authenticated tournament management
@@ -160,6 +161,8 @@ There is **no separate backend server**. The "backend" is implemented via:
 - Data: `GET /api/portal/participants`, `GET /api/portal/participants/[pid]`, `PATCH /api/portal/participants/[pid]`
 - Admin management: `GET/PATCH /api/portal/admins/[id]`, `POST /api/portal/admins/[id]/force-password-change`
 - Admin: `POST /api/portal/admin/import-xml`, `POST /api/portal/admin/import-lanes`, `POST /api/portal/admin/import-scores`, `GET /api/portal/admin/lane-assignments`, `GET /api/portal/admin/possible-issues`, `GET /api/portal/admin/audit`
+- Visibility: `GET/PUT /api/portal/admin/scores/visibility`, `GET/PUT /api/portal/admin/optional-events/visibility` (GET is public/unauthenticated for static page consumption)
+- Scores: `GET /api/portal/scores`, `GET /api/portal/admin/optional-events`
 
 **Note:** Sub-routes use `[id]/index.js` pattern. See `CLAUDE-PATTERNS.md#Next.js API Route Patterns`
 
@@ -306,11 +309,19 @@ Most components are sections with:
 - `src/utils/portal/event-constants.js` - EVENT_TYPES constants (team, doubles, singles)
 - `src/pages/api/portal/admin/possible-issues.js` - Data quality monitor endpoint
 - `src/utils/portal/possible-issues.js` - Data quality issue detection (5 categories: missing team/lane/partner, duplicate partners, non-reciprocal doubles, multiple partners, lanes without teams)
+- `src/utils/portal/visibility-toggle-route.js` - Shared factory for visibility toggle API routes (`createVisibilityToggleHandler`). See `CLAUDE-PATTERNS.md#Visibility Toggle Route Pattern`
+- `src/utils/portal/optional-events.js` - Optional events standings builder (best 3 of 9, all events handicapped, optional scratch by division)
+- `src/pages/api/portal/admin/scores/visibility.js` - Scores visibility toggle (public GET, admin PUT)
+- `src/pages/api/portal/admin/optional-events/visibility.js` - Optional events visibility toggle (public GET, admin PUT)
 
 **Database Migrations:**
 - `backend/scripts/migrations/add-scores-unique-constraint.sh` - Adds unique index on scores(pid, event_type)
 - All migrations run automatically during portal deployment
 - See `deploy_docs/MIGRATIONS.md` for migration system details
+
+**Deploy Pipeline:**
+- `deploy_scripts/lib/optimize-images.sh` - Pre-build image resizing (macOS `sips`, `MAX_IMAGE_WIDTH=800`). Required because `images: { unoptimized: true }` is set for static export. See `CLAUDE-DEPLOYMENT.md#Image Optimization in Deploy Pipeline`
+- `deploy_scripts/lib/build.sh` - Build orchestration; `write_server_mode_config()` prevents template drift. See `CLAUDE-DEPLOYMENT.md#Server-Mode Config Template`
 
 **Server Configuration:**
 - `backend/config/vhost.txt` - Nginx vhost config (deployed via CloudPanel ISP portal, NOT direct SSH). See `CLAUDE-DEPLOYMENT.md#Nginx Configuration Workflow`
@@ -406,6 +417,7 @@ Images are organized by category in `src/images/`:
 - Use responsive images with multiple sizes
 - Store background images for sections here
 - Apply `.section-background-shade` overlays for text readability
+- Source images wider than 800px are auto-resized during deploy build (`deploy_scripts/lib/optimize-images.sh`). Next.js image optimization is disabled (`unoptimized: true`) for static export, so source images must be pre-optimized.
 
 ### Testing Patterns
 
@@ -420,8 +432,9 @@ BDD workflow methodology is defined in the user-level `~/.claude/CLAUDE.md`. Thi
 
 **Test Types:**
 - **Static source analysis** -- read file contents, assert structural properties (imports, exports, naming, guard clauses). See `tests/unit/no-server-imports-frontend.test.js`, `tests/unit/refactoring-dry.test.js`.
-- **Behavioral tests** -- exercise functions/modules with inputs, assert outputs. See `backend/tests/api/audit.test.js`, `tests/unit/import-xml-no-clobber.test.js`, `tests/unit/import-lanes-csv.test.js`, `tests/unit/import-scores-csv.test.js`, `tests/unit/team-score-aggregation.test.js`, `tests/unit/doubles-pair-update.test.js`.
+- **Behavioral tests** -- exercise functions/modules with inputs, assert outputs. See `backend/tests/api/audit.test.js`, `tests/unit/import-xml-no-clobber.test.js`, `tests/unit/import-lanes-csv.test.js`, `tests/unit/import-scores-csv.test.js`, `tests/unit/team-score-aggregation.test.js`, `tests/unit/doubles-pair-update.test.js`, `tests/unit/optimize-images.test.js`.
 - **Route existence tests** -- verify expected files exist on disk. See `tests/frontend/portal-routes.test.js`.
+- **Page behavior tests** -- verify page source fetches correct APIs and passes correct props. See `tests/frontend/results-page-public-links.test.js`.
 
 **See `CLAUDE-PATTERNS.md#BDD Test Patterns` for test implementation patterns.**
 
