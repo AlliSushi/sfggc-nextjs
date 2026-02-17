@@ -54,6 +54,7 @@ source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/ssh.sh"
 source "$SCRIPT_DIR/lib/validation.sh"
 source "$SCRIPT_DIR/lib/build.sh"
+source "$SCRIPT_DIR/lib/optimize-images.sh"
 source "$SCRIPT_DIR/lib/deploy-static.sh"
 source "$SCRIPT_DIR/lib/deploy-portal.sh"
 
