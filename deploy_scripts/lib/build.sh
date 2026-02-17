@@ -26,6 +26,23 @@ restore_next_config() {
   fi
 }
 
+# write_server_mode_config - Write next.config.js for server mode
+# Extracted to single function to prevent template drift between callers.
+# See MEMORY.md: "Deploy Script Server-Mode Config Missing compress:false"
+write_server_mode_config() {
+  cat > next.config.js << 'EOF'
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  compress: false,
+  images: {
+    unoptimized: true
+  }
+}
+
+module.exports = nextConfig
+EOF
+}
+
 # configure_static_build - Set next.config.js for static export
 configure_static_build() {
   log_step "Configuring for static build"
@@ -76,6 +93,9 @@ build_static() {
 
   # Configure for static build
   configure_static_build
+
+  # Optimize oversized source images
+  optimize_images
 
   # Remove previous build
   if [ -d "out" ] && [ "${DRY_RUN:-false}" != true ]; then
@@ -153,18 +173,7 @@ build_portal_local() {
 
     backup_next_config
 
-    # Create server-mode config (compress: false lets nginx handle compression)
-    cat > next.config.js << 'EOF'
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  compress: false,
-  images: {
-    unoptimized: true
-  }
-}
-
-module.exports = nextConfig
-EOF
+    write_server_mode_config
 
     trap restore_next_config EXIT
   fi
@@ -243,17 +252,7 @@ ensure_server_mode_config() {
 
     backup_next_config
 
-    cat > next.config.js << 'EOF'
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  compress: false,
-  images: {
-    unoptimized: true
-  }
-}
-
-module.exports = nextConfig
-EOF
+    write_server_mode_config
 
     log_success "Server-mode config created"
     return 0

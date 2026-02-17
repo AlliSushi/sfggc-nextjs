@@ -221,30 +221,10 @@ test(
       "build_portal_local must backup config before modifying"
     );
 
-    // Creates server-mode config (no output: 'export')
-    const lines = content.split("\n");
-    let inPortalConfig = false;
-    let hasOutputExport = false;
-
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes("build_portal_local()")) {
-        inPortalConfig = true;
-      }
-      if (inPortalConfig && lines[i].includes("cat > next.config.js")) {
-        // Check next ~15 lines for output: 'export'
-        for (let j = i; j < Math.min(i + 15, lines.length); j++) {
-          if (lines[j].includes("output: 'export'")) {
-            hasOutputExport = true;
-            break;
-          }
-        }
-        break;
-      }
-    }
-
+    // Uses shared write_server_mode_config function (no inline template)
     assert.ok(
-      !hasOutputExport,
-      "build_portal_local server-mode config must NOT have output: 'export'"
+      content.includes("write_server_mode_config"),
+      "build_portal_local must use write_server_mode_config helper"
     );
   }
 );
@@ -402,6 +382,53 @@ test(
     assert.ok(
       hasConditionalRestore,
       "build_portal_local must conditionally restore only if backup exists"
+    );
+  }
+);
+
+test(
+  "Given write_server_mode_config function, when checking source, then it defines compress: false and unoptimized: true",
+  () => {
+    const content = readFile("deploy_scripts/lib/build.sh");
+
+    assert.ok(
+      content.includes("write_server_mode_config()"),
+      "build.sh must define write_server_mode_config function"
+    );
+
+    // Extract the function body
+    const funcStart = content.indexOf("write_server_mode_config()");
+    const funcBody = content.substring(funcStart, funcStart + 300);
+
+    assert.ok(
+      funcBody.includes("compress: false"),
+      "write_server_mode_config must set compress: false"
+    );
+
+    assert.ok(
+      funcBody.includes("unoptimized: true"),
+      "write_server_mode_config must set images.unoptimized: true"
+    );
+
+    assert.ok(
+      !funcBody.includes("output: 'export'"),
+      "write_server_mode_config must NOT include output: 'export'"
+    );
+  }
+);
+
+test(
+  "Given ensure_server_mode_config function, when checking source, then it uses write_server_mode_config helper",
+  () => {
+    const content = readFile("deploy_scripts/lib/build.sh");
+
+    const funcStart = content.indexOf("ensure_server_mode_config()");
+    const funcEnd = content.indexOf("}", funcStart + 100);
+    const funcBody = content.substring(funcStart, funcEnd);
+
+    assert.ok(
+      funcBody.includes("write_server_mode_config"),
+      "ensure_server_mode_config must delegate to write_server_mode_config"
     );
   }
 );
