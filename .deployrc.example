@@ -1,0 +1,144 @@
+# .deployrc.example - Deployment Configuration
+#
+# This file contains production deployment configuration and is used automatically
+# by the deployment script. You typically do NOT need to copy it.
+#
+# USAGE:
+#   Default: Script uses this file automatically for production deployment
+#   Custom:  Create .deployrc with different values for staging/testing
+#
+# CUSTOMIZATION (optional):
+#   If you need different values (e.g., staging server):
+#     cp .deployrc.example .deployrc
+#     # Edit .deployrc with your settings
+#     chmod 600 .deployrc
+#
+# NOTE: This file contains ONLY non-secret infrastructure configuration.
+#       Secrets (passwords, credentials) are collected interactively during
+#       deployment and stored directly on the server, never in this file.
+
+# ============================================================================
+# SSH Configuration
+# ============================================================================
+
+# SSH user for deployment
+DEPLOY_SSH_USER="goldengateclassic"
+
+# SSH host (IP or hostname)
+DEPLOY_SSH_HOST="54.70.1.215"
+
+# Domain name
+DEPLOY_DOMAIN="www.goldengateclassic.org"
+
+# ============================================================================
+# Static Site Deployment
+# ============================================================================
+
+# Path where static site files will be deployed
+DEPLOY_STATIC_PATH="/home/goldengateclassic/htdocs/www.goldengateclassic.org"
+
+# ============================================================================
+# Portal Application Deployment
+# ============================================================================
+
+# Path where portal application will be deployed
+DEPLOY_PORTAL_PATH="/home/goldengateclassic/htdocs/www.goldengateclassic.org/portal-app"
+
+# PM2 process name for the portal app
+DEPLOY_PM2_APP_NAME="sfggc-portal"
+
+# ============================================================================
+# Database Configuration (Portal Only) - NON-SECRET
+# ============================================================================
+#
+# NOTE: Database password is NOT stored here. It is prompted interactively
+#       during first portal deployment and stored in .env.local on the
+#       server only.
+
+# Database host (AWS RDS)
+DEPLOY_DB_HOST="shared2.cdms8mviovca.us-west-2.rds.amazonaws.com"
+
+# Database port
+DEPLOY_DB_PORT="3306"
+
+# Database name
+DEPLOY_DB_NAME="goldengate"
+
+# Database username (non-secret, always the same)
+DEPLOY_DB_USER="goldengate"
+
+# ============================================================================
+# SMTP Configuration (Portal Only) - NON-SECRET
+# ============================================================================
+#
+# NOTE: SMTP password is NOT stored here. It is prompted interactively
+#       during first portal deployment and stored in .env.local on the
+#       server only.
+
+# SMTP host (AWS SES)
+DEPLOY_SMTP_HOST="email-smtp.us-west-2.amazonaws.com"
+
+# SMTP port
+DEPLOY_SMTP_PORT="587"
+
+# SMTP username (public, not secret)
+DEPLOY_SMTP_USER="AKIAVU7WKXGTZZA3SOHN"
+
+# SMTP from address
+DEPLOY_SMTP_FROM="Golden Gate Classic <noreply@goldengateclassic.org>"
+
+# ============================================================================
+# Secrets Collected During First Portal Deployment
+# ============================================================================
+#
+# The following secrets are NOT configured in this file. They are collected
+# interactively during first-time portal deployment:
+#
+# 1. Database password
+#    - Prompted during deployment
+#    - Combined with DEPLOY_DB_USER to create PORTAL_DATABASE_URL
+#    - Stored in server's .env.local
+#
+# 2. SMTP password
+#    - Prompted during deployment
+#    - Stored in server's .env.local as SMTP_PASS
+#
+# 3. Admin session secret
+#    - Auto-generated (32-byte random hex)
+#    - Stored in server's .env.local as ADMIN_SESSION_SECRET
+#
+# 4. Super admin account (email, name, password)
+#    - Prompted during deployment
+#    - Stored in database 'admins' table (password hashed with bcrypt)
+#
+# All secrets remain on the server only - never stored in local config files.
+#
+# ============================================================================
+# Non-Interactive Deployment (Optional Environment Variables)
+# ============================================================================
+#
+# For automation or CI/CD, you can provide secrets via environment variables
+# instead of interactive prompts. Set these BEFORE running the deployment:
+#
+# First-time portal deployment secrets:
+#   export DEPLOY_DB_PASSWORD="your-database-password"
+#   export DEPLOY_SMTP_PASSWORD="your-smtp-password"
+#   export DEPLOY_SESSION_SECRET="64-char-hex-string"  # Optional, auto-generated if not set
+#   export DEPLOY_PORTAL_BASE_URL="https://your-domain"  # Optional, defaults to https://$DEPLOY_DOMAIN
+#
+# First-time admin account creation:
+#   export DEPLOY_ADMIN_EMAIL="admin@example.com"
+#   export DEPLOY_ADMIN_NAME="Admin Name"
+#   export DEPLOY_ADMIN_PASSWORD="secure-password"
+#
+# Example non-interactive first deployment:
+#   export DEPLOY_DB_PASSWORD="secretpass"
+#   export DEPLOY_SMTP_PASSWORD="smtppass"
+#   export DEPLOY_ADMIN_EMAIL="admin@goldengateclassic.org"
+#   export DEPLOY_ADMIN_NAME="Tournament Admin"
+#   export DEPLOY_ADMIN_PASSWORD="AdminPass123!"
+#   ./deploy_scripts/deploy.sh --portal
+#
+# If environment variables are not set, the script will prompt interactively.
+# After first deployment, subsequent deployments don't need these (config
+# exists on server).

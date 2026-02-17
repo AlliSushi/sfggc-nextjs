@@ -1,0 +1,9 @@
+Email,PID,Sanction,Avg,Telephone,LastName,FirstName,Pref_FName,MiddleName,Birth_Mo,Birth_Dy,Address,City,Region,PostalCode,Country
+john@acme.com,000104,LGBT Wednesday Community,177,(415) 555-1234,Smith,John,John,,4,1,123 Main Street,San Francisco,CA,94112,USA
+jane@acme.com,000105,,145,,Jones,Jane,Janey,,,,,,,,
+spot@acme.com,000106,,190,,Johnson,Spot,,,,,,,,,
+socks@acme.com,000107,,133,,Brown,Socks,,,,,,,,,
+bill@ipsum.com,000108,,167,,Williams,William,Bill,,,,,,,,
+bob@ipsum.com,000109,,180,,Davis,Robert,Bob,,,,,,,,
+mary@ipsum.com,000110,,143,,Miller,Mary,,,,,,,,,
+jenny@ipsum.com,000111,,157,,James,Jennifer,Jenny,,,,,,,,

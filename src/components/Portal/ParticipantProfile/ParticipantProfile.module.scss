@@ -1,0 +1,25 @@
+.ParticipantProfile {
+  border-radius: 0.75rem;
+
+  @media (max-width: 575.98px) {
+    :global(.card-body) {
+      padding: 1rem;
+    }
+
+    :global(.h4) {
+      font-size: 1.1rem;
+    }
+
+    :global(.h6) {
+      font-size: 0.9rem;
+    }
+
+    :global(.badge) {
+      font-size: 0.75rem;
+    }
+  }
+}
+
+.PreviewBanner {
+  margin-bottom: 1rem;
+}

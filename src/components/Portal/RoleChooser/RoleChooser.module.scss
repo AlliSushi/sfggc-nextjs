@@ -1,0 +1,16 @@
+.RoleChooser {
+  .Card {
+    border: 1px solid var(--sfggc-border-color);
+    border-radius: 0.75rem;
+  }
+
+  @media (max-width: 575.98px) {
+    .Card :global(.card-body) {
+      padding: 1rem;
+    }
+
+    :global(.btn) {
+      width: 100%;
+    }
+  }
+}

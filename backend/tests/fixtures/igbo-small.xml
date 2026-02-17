@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<IGBOTS>
+  <PEOPLES>
+    <PEOPLE>
+      <ID>1001</ID>
+      <LAST_NAME>Test</LAST_NAME>
+      <FIRST_NAME>Alice</FIRST_NAME>
+      <EMAIL>alice@example.com</EMAIL>
+      <PHONE_1>555-111-2222</PHONE_1>
+      <CITY>San Francisco</CITY>
+      <STATE>CA</STATE>
+      <COUNTRY>US</COUNTRY>
+      <BIRTH_DAY>10</BIRTH_DAY>
+      <BIRTH_MONTH>03</BIRTH_MONTH>
+      <TEAM_ID>3001</TEAM_ID>
+      <TEAM_NAME>Team One</TEAM_NAME>
+      <DOUBLES_EXTERNAL_ID>5001</DOUBLES_EXTERNAL_ID>
+      <BOOK_AVERAGE>150</BOOK_AVERAGE>
+    </PEOPLE>
+  </PEOPLES>
+</IGBOTS>

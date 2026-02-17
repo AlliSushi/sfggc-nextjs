@@ -1,48 +1,49 @@
-# CloudPanel Nginx Configuration for Static Next.js Site
+# CloudPanel Nginx Configuration: Static Site + Portal
 
-## Issue
+## Overview
 
-Your CloudPanel nginx configuration is currently set up to **proxy** to a Node.js application, but your SFGGC website is a **static Next.js site** that should be served directly from files. You need to replace the proxy configuration with static file serving.
+The SFGGC site uses a **hybrid nginx config**: static files for the public site and a reverse proxy to a Next.js server (port 3000) for the tournament portal. This replaces the old proxy-only configuration.
 
-## Solution: Replace the Location Block
+## What to Configure
 
-In your CloudPanel nginx settings, find the `location /` block and **replace the entire proxy configuration** with this static file serving configuration:
+Replace the CloudPanel default `location /` proxy block with the blocks below. The portal proxy blocks **must** appear before the `location /` catch-all.
 
-### Replace This (Current - Proxy Configuration):
 ```nginx
-location / {
-  proxy_pass http://127.0.0.1:{{app_port}}/;
+# Portal pages — proxy to Next.js server on port 3000
+location /portal {
+  proxy_pass http://127.0.0.1:3000;
   proxy_http_version 1.1;
-  proxy_set_header X-Forwarded-Host $host;
-  proxy_set_header X-Forwarded-Server $host;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection 'upgrade';
+  proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_cache_bypass $http_upgrade;
+}
+
+# Portal API routes
+location /api/portal {
+  proxy_pass http://127.0.0.1:3000;
+  proxy_http_version 1.1;
   proxy_set_header Host $host;
-  proxy_set_header Upgrade $http_upgrade;
-  proxy_set_header Connection "Upgrade";
-  proxy_pass_request_headers on;
-  proxy_max_temp_file_size 0;
-  proxy_connect_timeout 900;
-  proxy_send_timeout 900;
-  proxy_read_timeout 900;
-  proxy_buffer_size 128k;
-  proxy_buffers 4 256k;
-  proxy_busy_buffers_size 256k;
-  proxy_temp_file_write_size 256k;
-}
-```
-
-### With This (Static File Serving):
-```nginx
-location / {
-  try_files $uri $uri/ $uri.html /index.html;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
 }
 
-# Serve Next.js static files with long cache
-location /_next/static {
+# Next.js assets (JS/CSS bundles for portal pages)
+location /_next {
+  proxy_pass http://127.0.0.1:3000;
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
   expires 1y;
   add_header Cache-Control "public, immutable";
+}
+
+# Static public site — catch-all for non-portal routes
+location / {
+  try_files $uri $uri/ $uri.html /index.html;
 }
 
 # Cache static assets (images, fonts, CSS, JS)
@@ -110,15 +111,41 @@ server {
 
   index index.html;
 
-  # Handle Next.js client-side routing (CRITICAL!)
-  location / {
-    try_files $uri $uri/ $uri.html /index.html;
+  # Portal pages — proxy to Next.js server on port 3000
+  location /portal {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache_bypass $http_upgrade;
   }
 
-  # Serve Next.js static files with long cache
-  location /_next/static {
+  # Portal API routes
+  location /api/portal {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Next.js assets (JS/CSS bundles for portal pages)
+  location /_next {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
     expires 1y;
     add_header Cache-Control "public, immutable";
+  }
+
+  # Static public site — catch-all
+  location / {
+    try_files $uri $uri/ $uri.html /index.html;
   }
 
   # Cache static assets (images, fonts, CSS, JS)
@@ -138,42 +165,10 @@ server {
 ## Steps to Update in CloudPanel
 
 1. **Open CloudPanel** and navigate to your site: `www.goldengateclassic.org`
-
-2. **Go to Nginx Settings** (or where you edit the nginx config)
-
-3. **Find the `location /` block** - it should have all the `proxy_pass` directives
-
-4. **Replace the entire `location /` block** with:
-   ```nginx
-   location / {
-     try_files $uri $uri/ $uri.html /index.html;
-   }
-   ```
-
-5. **Add these additional location blocks** right after the `location /` block:
-   ```nginx
-   # Serve Next.js static files with long cache
-   location /_next/static {
-     expires 1y;
-     add_header Cache-Control "public, immutable";
-   }
-
-   # Cache static assets
-   location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
-     expires 1y;
-     add_header Cache-Control "public, immutable";
-   }
-
-   # Handle 404 errors
-   error_page 404 /404.html;
-   location = /404.html {
-     internal;
-   }
-   ```
-
-6. **Save the configuration**
-
-7. **CloudPanel should automatically test and reload nginx**
+2. **Go to Nginx Settings** (Vhost tab)
+3. **Replace** the existing location blocks with the full config from the "What to Configure" section above
+4. **Save** — CloudPanel will test and reload nginx automatically
+5. **Verify** by visiting both the public site and the portal
 
 ## Verify the Root Path
 
@@ -184,17 +179,17 @@ You can verify this in CloudPanel's site settings - look for "Document Root" or 
 
 ## Test After Changes
 
-1. Visit: `https://www1.goldengateclassic.org/`
-2. Test pages: `/committee`, `/results`, `/rules`, `/san-francisco`
-3. Check browser console (F12) for any errors
-4. Verify CSS and images are loading
+1. Static site: `https://www.goldengateclassic.org/` (public pages: `/committee`, `/results`, `/rules`)
+2. Portal: `https://www.goldengateclassic.org/portal/`
+3. Portal admin: `https://www.goldengateclassic.org/portal/admin/`
+4. Check browser console (F12) for errors
 
-## Why This Fixes It
+## How It Works
 
-- **Before**: nginx was trying to proxy requests to a non-existent Node.js app on port `{{app_port}}`
-- **After**: nginx serves static files directly from your deployment directory
-- **`try_files`**: Handles Next.js client-side routing by falling back to `index.html` for all routes
-- **Static assets**: Properly cached and served from `/_next/static/`
+- `/portal/*` and `/api/portal/*` are proxied to the Next.js server on port 3000
+- `/_next/*` is proxied so portal pages can load their JS/CSS bundles
+- Everything else is served as static files from the document root
+- The `location /` catch-all with `try_files` handles client-side routing for the public site
 
 ## Troubleshooting
 

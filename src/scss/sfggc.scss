@@ -8,6 +8,81 @@ html {
 body {
   text-shadow: 1px 1px 1px var(--sfggc-body-text-shadow-color);
 
+  &.portal-mode {
+    background-color: #7f8791;
+
+    .nav-and-top {
+      .top-image-background,
+      .top-background-shade {
+        display: none;
+      }
+    }
+
+    .btn-outline-primary {
+      background-color: var(--#{$prefix}primary);
+      color: #fff;
+      border-color: var(--#{$prefix}primary);
+    }
+
+    .btn-outline-secondary {
+      background-color: var(--#{$prefix}secondary);
+      color: #fff;
+      border-color: var(--#{$prefix}secondary);
+    }
+
+    .btn-outline-success {
+      background-color: var(--#{$prefix}success);
+      color: #fff;
+      border-color: var(--#{$prefix}success);
+    }
+
+    .btn-outline-danger {
+      background-color: var(--#{$prefix}danger);
+      color: #fff;
+      border-color: var(--#{$prefix}danger);
+    }
+
+    .btn-outline-info {
+      background-color: var(--#{$prefix}info);
+      color: #fff;
+      border-color: var(--#{$prefix}info);
+    }
+
+    .btn-outline-dark {
+      background-color: var(--#{$prefix}dark);
+      color: #fff;
+      border-color: var(--#{$prefix}dark);
+    }
+
+    .btn-outline-warning {
+      background-color: var(--#{$prefix}warning);
+      color: #212529;
+      border-color: var(--#{$prefix}warning);
+    }
+
+    .btn-outline-light {
+      background-color: var(--#{$prefix}light);
+      color: #212529;
+      border-color: var(--#{$prefix}light);
+    }
+
+    @media (max-width: 575.98px) {
+      .portal-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .portal-actions .btn {
+        width: 100%;
+      }
+
+      .portal-edit-form {
+        --#{$prefix}gutter-x: 0.75rem;
+        --#{$prefix}gutter-y: 0.5rem;
+      }
+    }
+  }
+
   .nav-and-top {
     position: relative;
 

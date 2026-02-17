@@ -1,6 +1,8 @@
 import styles from './Results.module.scss';
 
-const Results = () => {
+const RESULTS_FROM_QUERY = "%2Fresults";
+
+const Results = ({ showStandingsLink = false, showOptionalEventsLink = false }) => {
   const available = [
     [
       //{ id: 'doubles', name: 'Doubles Event' },
@@ -48,6 +50,23 @@ const Results = () => {
           </div>
         ))}
       </div>
+      {(showStandingsLink || showOptionalEventsLink) && (
+        <div className="px-2 px-xl-0 mt-4 mb-4 d-flex flex-wrap gap-3">
+          {showStandingsLink && (
+            <a className="btn btn-primary" href={`/portal/scores?from=${RESULTS_FROM_QUERY}`}>
+              View Overall Standings
+            </a>
+          )}
+          {showOptionalEventsLink && (
+            <a
+              className="btn btn-primary"
+              href={`/portal/admin/optional-events?from=${RESULTS_FROM_QUERY}`}
+            >
+              View Optional Events
+            </a>
+          )}
+        </div>
+      )}
     </section>
   );
 }

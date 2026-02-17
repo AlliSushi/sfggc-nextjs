@@ -1,0 +1,230 @@
+import { query } from "../../../../utils/portal/db.js";
+import { toTeamSlug } from "../../../../utils/portal/slug.js";
+import { requireAnySession } from "../../../../utils/portal/auth-guards.js";
+import { methodNotAllowed } from "../../../../utils/portal/http.js";
+import { buildDisplayName } from "../../../../utils/portal/name-helpers.js";
+import { EVENT_TYPES } from "../../../../utils/portal/event-constants.js";
+import { extractTeamScores, extractTeamLane, extractDoublesPairScores } from "../../../../utils/portal/team-scores.js";
+
+
+const sortByTeamOrder = (a, b) => {
+  const orderA = a.team_order ?? Number.MAX_SAFE_INTEGER;
+  const orderB = b.team_order ?? Number.MAX_SAFE_INTEGER;
+  if (orderA !== orderB) return orderA - orderB;
+  const lastCompare = (a.last_name || "").localeCompare(b.last_name || "");
+  if (lastCompare !== 0) return lastCompare;
+  return (a.first_name || "").localeCompare(b.first_name || "");
+};
+
+const resolveRosterPartner = ({ member, memberIndex, didIndex }) => {
+  if (member.partner_pid && memberIndex.has(member.partner_pid)) {
+    return memberIndex.get(member.partner_pid);
+  }
+  // If a doubles_pairs entry exists (doubles_did is set), its partner_pid is authoritative
+  // even when null (meaning the partner was intentionally cleared). Skip fallbacks.
+  if (member.doubles_did) return null;
+  if (member.did && didIndex.has(member.did)) {
+    const partner = didIndex.get(member.did).find((pid) => pid !== member.pid);
+    if (partner && memberIndex.has(partner)) {
+      return memberIndex.get(partner);
+    }
+  }
+  if (member.partner_first_name && member.partner_last_name) {
+    const match = [...memberIndex.values()].find(
+      (person) =>
+        person.pid !== member.pid &&
+        person.first_name?.toLowerCase() === member.partner_first_name.toLowerCase() &&
+        person.last_name?.toLowerCase() === member.partner_last_name.toLowerCase()
+    );
+    if (match) return match;
+  }
+  return null;
+};
+
+const buildDidIndex = (roster) => {
+  const didIndex = new Map();
+  roster.forEach((member) => {
+    if (!member.did) return;
+    const list = didIndex.get(member.did) || [];
+    list.push(member.pid);
+    didIndex.set(member.did, list);
+  });
+  return didIndex;
+};
+
+const attachResolvedPartners = (roster) => {
+  const memberIndex = new Map(roster.map((member) => [member.pid, member]));
+  const didIndex = buildDidIndex(roster);
+  return roster.map((member) => ({
+    ...member,
+    partner: resolveRosterPartner({ member, memberIndex, didIndex }),
+  }));
+};
+
+const seedCaptainAndPartner = (rosterWithPartner, used) => {
+  const captain = rosterWithPartner.find((member) => member.team_captain);
+  if (!captain) return [];
+  const ordered = [captain];
+  used.add(captain.pid);
+  if (captain.partner) {
+    ordered.push(captain.partner);
+    used.add(captain.partner.pid);
+  }
+  return ordered;
+};
+
+const appendSortedRemainingMembers = ({ rosterWithPartner, ordered, used }) => {
+  const remaining = rosterWithPartner
+    .filter((member) => !used.has(member.pid))
+    .sort(sortByTeamOrder);
+
+  while (remaining.length) {
+    const next = remaining.shift();
+    if (!next || used.has(next.pid)) continue;
+    ordered.push(next);
+    used.add(next.pid);
+    if (next.partner && !used.has(next.partner.pid)) {
+      ordered.push(next.partner);
+      used.add(next.partner.pid);
+      const partnerIndex = remaining.findIndex(
+        (member) => member.pid === next.partner.pid
+      );
+      if (partnerIndex >= 0) {
+        remaining.splice(partnerIndex, 1);
+      }
+    }
+  }
+};
+
+const orderRoster = (roster) => {
+  if (!roster.length) return [];
+
+  const rosterWithPartner = attachResolvedPartners(roster);
+  if (!rosterWithPartner.some((member) => member.team_captain)) {
+    return rosterWithPartner.sort(sortByTeamOrder);
+  }
+
+  const used = new Set();
+  const ordered = seedCaptainAndPartner(rosterWithPartner, used);
+  appendSortedRemainingMembers({ rosterWithPartner, ordered, used });
+
+  return ordered;
+};
+
+const fetchTeamBySlug = async (teamSlug) => {
+  const { rows } = await query("select * from teams where slug = ?", [teamSlug]);
+  if (rows?.[0]) return rows[0];
+
+  // Fallback: match by generated slug from team_name for teams without a slug column
+  const { rows: allTeams } = await query("select * from teams where slug is null");
+  return allTeams?.find((t) => toTeamSlug(t.team_name) === teamSlug) || null;
+};
+
+const fetchTeamMembers = async (tnmtId) => {
+  const { rows: members } = await query(
+    `
+      select
+        p.pid,
+        p.first_name,
+        p.last_name,
+        p.nickname,
+        p.city,
+        p.region,
+        p.country,
+        p.tnmt_id,
+        p.did,
+        p.team_captain,
+        p.team_order,
+        d.did as doubles_did,
+        d.partner_pid,
+        d.partner_first_name,
+        d.partner_last_name,
+        s.lane as team_lane,
+        s.game1 as team_game1,
+        s.game2 as team_game2,
+        s.game3 as team_game3,
+        ds.game1 as doubles_game1,
+        ds.game2 as doubles_game2,
+        ds.game3 as doubles_game3
+      from people p
+      left join doubles_pairs d on d.did = p.did
+      left join scores s on s.pid = p.pid and s.event_type = ?
+      left join scores ds on ds.pid = p.pid and ds.event_type = ?
+      where p.tnmt_id = ?
+      `,
+    [EVENT_TYPES.TEAM, EVENT_TYPES.DOUBLES, tnmtId]
+  );
+  return members;
+};
+
+const resolveTeamLocation = (members) => {
+  return (
+    members.find(
+      (member) => member.team_captain && (member.city || member.region || member.country)
+    ) ||
+    members.find((member) => member.city || member.region || member.country) ||
+    null
+  );
+};
+
+
+const buildRosterResponse = (members) => {
+  return members.map((member) => ({
+    pid: member.pid,
+    name: buildDisplayName(member),
+    isCaptain: Boolean(member.team_captain),
+    teamOrder: member.team_order,
+    doublesPartnerPid: member.partner?.pid || "",
+    doublesPartnerName: member.partner ? buildDisplayName(member.partner) : "",
+    doublesPairScores: extractDoublesPairScores(member, member.partner || null),
+  }));
+};
+
+export default async function handler(req, res) {
+  const { teamSlug } = req.query;
+
+  try {
+    if (req.method !== "GET") {
+      methodNotAllowed(req, res, ["GET"]);
+      return;
+    }
+
+    const auth = await requireAnySession(req, res);
+    if (!auth) {
+      return;
+    }
+
+    const team = await fetchTeamBySlug(teamSlug);
+    if (!team) {
+      res.status(404).json({ error: "Team not found." });
+      return;
+    }
+
+    const members = await fetchTeamMembers(team.tnmt_id);
+    const orderedMembers = orderRoster(members);
+    const locationSource = resolveTeamLocation(orderedMembers);
+    const teamScores = extractTeamScores(orderedMembers);
+    const teamLane = extractTeamLane(orderedMembers);
+    const orderedRoster = buildRosterResponse(orderedMembers);
+
+    res.status(200).json({
+      team: {
+        tnmtId: team.tnmt_id,
+        name: team.team_name,
+        slug: team.slug,
+        lane: teamLane,
+        scores: teamScores,
+        location: locationSource
+          ? {
+              city: locationSource.city || "",
+              region: locationSource.region || "",
+              country: locationSource.country || "",
+            }
+          : null,
+      },
+      roster: orderedRoster,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Unexpected error." });
+  }
+}

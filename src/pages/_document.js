@@ -1,6 +1,4 @@
 import {Html, Head, Main, NextScript} from "next/document";
-import Navigation from "../components/layout/navigation";
-import Hero from "../components/Hero/Hero";
 
 const Document = () => (
   <Html>

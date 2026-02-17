@@ -1,0 +1,3 @@
+const AUDIT_RESULTS_LIMIT = 500;
+
+export { AUDIT_RESULTS_LIMIT };

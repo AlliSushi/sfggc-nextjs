@@ -1,0 +1,159 @@
+# ============================================================================
+# SFGGC Nginx Vhost Configuration
+# ============================================================================
+#
+# This file contains the nginx virtual host configuration for:
+# - Static public website (tournament info pages)
+# - Portal application (admin dashboard + participant login)
+#
+# CONFIGURATION MANAGEMENT:
+# This file is managed in version control at:
+#   backend/config/vhost.txt
+#
+# Since you do NOT have direct SSH access to nginx, use this workflow:
+# 1. Edit this file locally
+# 2. Copy to clipboard: cat backend/config/vhost.txt | pbcopy
+# 3. Log into ISP control panel
+# 4. Navigate to nginx/vhost configuration
+# 5. Paste entire contents
+# 6. Save (panel validates and reloads nginx automatically)
+# 7. Commit changes: git add backend/config/vhost.txt && git commit
+#
+# DO NOT attempt these commands (they require direct nginx access):
+#   nginx -t
+#   systemctl reload nginx
+#   sudo vim /etc/nginx/...
+#
+# For detailed documentation, see:
+#   deploy_docs/DEPLOYMENT.md#nginx-configuration-management
+#
+# ============================================================================
+
+# Upstream block for portal Node.js backend
+# keepalive enables persistent connections between nginx and Node.js,
+# avoiding TCP handshake overhead on every request (saves 20-50ms per request)
+upstream portal_backend {
+  server 127.0.0.1:3000;
+  keepalive 16;
+}
+
+server {
+  # ============================================================================
+  # SSL and Server Configuration
+  # ============================================================================
+  # CloudPanel placeholders ({{...}}) are replaced by the control panel
+
+  listen 80;
+  listen [::]:80;
+  listen 443 quic;
+  listen 443 ssl;
+  listen [::]:443 quic;
+  listen [::]:443 ssl;
+  http2 on;
+  http3 off;
+  {{ssl_certificate_key}}
+  {{ssl_certificate}}
+  server_name www.goldengateclassic.org www1.goldengateclassic.org;
+  {{root}}
+
+  {{nginx_access_log}}
+  {{nginx_error_log}}
+
+  # Force HTTPS
+  if ($scheme != "https") {
+    rewrite ^ https://$host$request_uri permanent;
+  }
+
+  # Allow Let's Encrypt validation
+  location ~ /.well-known {
+    auth_basic off;
+    allow all;
+  }
+
+  {{settings}}
+
+  include /etc/nginx/global_settings;
+
+  index index.html;
+
+  # ============================================================================
+  # PORTAL APPLICATION - Proxy to Node.js on port 3000
+  # ============================================================================
+  # These location blocks proxy requests to the Next.js server (PM2 process)
+  # running on port 3000. DO NOT REMOVE these blocks or the portal will fail.
+  #
+  # CRITICAL: The ^~ modifier on these blocks prevents the regex location
+  # (~* \.(js|css|...)$) from hijacking portal requests. Without ^~, nginx
+  # checks regex locations after prefix matches, and /_next/static/*.js
+  # would be caught by the static asset regex instead of proxied to Node.js.
+
+  # Portal pages (admin dashboard, participant login, profiles)
+  location ^~ /portal {
+    proxy_pass http://portal_backend;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache_bypass $http_upgrade;
+  }
+
+  # Portal API routes
+  location ^~ /api/portal {
+    proxy_pass http://portal_backend;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Next.js static assets — served directly from disk (bypasses Node.js)
+  # These are immutable build artifacts with content hashes in filenames
+  location ^~ /_next/static {
+    alias /home/goldengateclassic/htdocs/www.goldengateclassic.org/portal-app/.next/static;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+
+  # Next.js dynamic requests (data fetching, page rendering via _next/data)
+  location ^~ /_next {
+    proxy_pass http://portal_backend;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # ============================================================================
+  # STATIC SITE - Serve static files
+  # ============================================================================
+  # Serves the pre-built static pages (homepage, results, rules, etc.)
+  # from the "out" directory deployed via rsync.
+
+  location / {
+    # Strip trailing slash so /results/ becomes /results, which then
+    # resolves to results.html via try_files (prevents 403 on directories
+    # that share a name with a static page, e.g. results/ PDFs)
+    rewrite ^/(.+)/$ /$1 permanent;
+
+    try_files $uri $uri.html $uri/ /index.html;
+  }
+
+  # Cache static assets (images, fonts, CSS, JS)
+  location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+
+  # Handle 404 errors
+  error_page 404 /404.html;
+  location = /404.html {
+    internal;
+  }
+}
