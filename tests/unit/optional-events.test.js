@@ -198,4 +198,129 @@ describe("optional-events utility", async () => {
   it("Given optional-events utility exports, when inspected, then DIVISION_ORDER is sourced only from division-constants", () => {
     assert.equal(hasDivisionOrderExportOnOptionalEvents, false);
   });
+
+  it("Given two participants tied for highest game in a division, when building standings, then optionalScratchHighGame includes both bowlers", () => {
+    const rows = [
+      {
+        pid: "P20",
+        first_name: "Daniel",
+        last_name: "Chin",
+        nickname: "",
+        division: "A",
+        optional_best_3_of_9: 0,
+        optional_scratch: 1,
+        optional_all_events_hdcp: 0,
+        event_type: "team",
+        game1: 300,
+        game2: 190,
+        game3: 180,
+        handicap: 0,
+      },
+      {
+        pid: "P21",
+        first_name: "Scott",
+        last_name: "Curtis",
+        nickname: "",
+        division: "A",
+        optional_best_3_of_9: 0,
+        optional_scratch: 1,
+        optional_all_events_hdcp: 0,
+        event_type: "team",
+        game1: 200,
+        game2: 300,
+        game3: 180,
+        handicap: 0,
+      },
+    ];
+
+    const result = buildOptionalEventsStandings(rows);
+    const highGame = result.optionalScratchHighGame.A;
+
+    assert.ok(highGame, "Division A should have a high game entry");
+    assert.equal(highGame.score, 300);
+    assert.equal(highGame.bowlers.length, 2);
+
+    const names = highGame.bowlers.map((b) => b.name).sort();
+    assert.deepEqual(names, ["Daniel Chin", "Scott Curtis"]);
+
+    const daniel = highGame.bowlers.find((b) => b.name === "Daniel Chin");
+    assert.equal(daniel.eventType, "team");
+    assert.equal(daniel.gameNumber, 1);
+
+    const scott = highGame.bowlers.find((b) => b.name === "Scott Curtis");
+    assert.equal(scott.eventType, "team");
+    assert.equal(scott.gameNumber, 2);
+  });
+
+  it("Given a single highest game in a division, when building standings, then optionalScratchHighGame shows one bowler", () => {
+    const rows = [
+      {
+        pid: "P30",
+        first_name: "Jordan",
+        last_name: "Feigerle",
+        nickname: "",
+        division: "B",
+        optional_best_3_of_9: 0,
+        optional_scratch: 1,
+        optional_all_events_hdcp: 0,
+        event_type: "singles",
+        game1: 200,
+        game2: 257,
+        game3: 190,
+        handicap: 0,
+      },
+      {
+        pid: "P31",
+        first_name: "Other",
+        last_name: "Player",
+        nickname: "",
+        division: "B",
+        optional_best_3_of_9: 0,
+        optional_scratch: 1,
+        optional_all_events_hdcp: 0,
+        event_type: "singles",
+        game1: 180,
+        game2: 190,
+        game3: 200,
+        handicap: 0,
+      },
+    ];
+
+    const result = buildOptionalEventsStandings(rows);
+    const highGame = result.optionalScratchHighGame.B;
+
+    assert.ok(highGame);
+    assert.equal(highGame.score, 257);
+    assert.equal(highGame.bowlers.length, 1);
+    assert.equal(highGame.bowlers[0].name, "Jordan Feigerle");
+    assert.equal(highGame.bowlers[0].eventType, "singles");
+    assert.equal(highGame.bowlers[0].gameNumber, 2);
+  });
+
+  it("Given a division with no optional scratch participants, when building standings, then optionalScratchHighGame is null for that division", () => {
+    const rows = [
+      {
+        pid: "P40",
+        first_name: "Only",
+        last_name: "DivA",
+        nickname: "",
+        division: "A",
+        optional_best_3_of_9: 0,
+        optional_scratch: 1,
+        optional_all_events_hdcp: 0,
+        event_type: "team",
+        game1: 200,
+        game2: 190,
+        game3: 180,
+        handicap: 0,
+      },
+    ];
+
+    const result = buildOptionalEventsStandings(rows);
+    assert.equal(result.optionalScratchHighGame.A.score, 200);
+    assert.equal(result.optionalScratchHighGame.B, null);
+    assert.equal(result.optionalScratchHighGame.C, null);
+    assert.equal(result.optionalScratchHighGame.D, null);
+    assert.equal(result.optionalScratchHighGame.E, null);
+  });
 });

@@ -10,6 +10,10 @@ const createEmptyOptionalEventsStandings = () => ({
     acc[division] = [];
     return acc;
   }, {}),
+  optionalScratchHighGame: DIVISION_ORDER.reduce((acc, division) => {
+    acc[division] = null;
+    return acc;
+  }, {}),
 });
 
 const createOptionalParticipant = (row) => ({
@@ -21,16 +25,22 @@ const createOptionalParticipant = (row) => ({
   optionalAllEventsHdcp: Number(row.optional_all_events_hdcp || 0) === 1,
   scratchGames: [],
   hdcpGames: [],
+  gameDetails: [],
 });
 
 const addRowScores = (participant, row) => {
   const handicap = toNumberOrNull(row.handicap) || 0;
   const games = [row.game1, row.game2, row.game3];
-  for (const rawGame of games) {
-    const scratch = toNumberOrNull(rawGame);
+  for (let i = 0; i < games.length; i++) {
+    const scratch = toNumberOrNull(games[i]);
     if (scratch == null) continue;
     participant.scratchGames.push(scratch);
     participant.hdcpGames.push(scratch + handicap);
+    participant.gameDetails.push({
+      score: scratch,
+      eventType: row.event_type,
+      gameNumber: i + 1,
+    });
   }
 };
 
@@ -99,6 +109,27 @@ const buildOptionalEventsStandings = (rows) => {
   for (const division of DIVISION_ORDER) {
     standings.optionalScratch[division].sort(sortByNumericFieldAndName("totalScratch"));
     addRanks(standings.optionalScratch[division]);
+  }
+
+  for (const division of DIVISION_ORDER) {
+    let highScore = 0;
+    const bowlers = [];
+    for (const entry of standings.optionalScratch[division]) {
+      const participant = participants.get(entry.pid);
+      if (!participant) continue;
+      for (const detail of participant.gameDetails) {
+        if (detail.score > highScore) {
+          highScore = detail.score;
+          bowlers.length = 0;
+          bowlers.push({ pid: entry.pid, name: entry.name, eventType: detail.eventType, gameNumber: detail.gameNumber });
+        } else if (detail.score === highScore) {
+          bowlers.push({ pid: entry.pid, name: entry.name, eventType: detail.eventType, gameNumber: detail.gameNumber });
+        }
+      }
+    }
+    standings.optionalScratchHighGame[division] = bowlers.length > 0
+      ? { score: highScore, bowlers }
+      : null;
   }
 
   return standings;

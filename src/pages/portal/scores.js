@@ -306,6 +306,7 @@ export const getServerSideProps = async ({ req }) => {
     req,
     getParticipantVisibility: getScoresVisibleToParticipants,
     visibilityPropName: "initialParticipantsCanViewScores",
+    allowPublicWhenVisible: true,
   });
 };
 

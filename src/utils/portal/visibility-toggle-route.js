@@ -10,14 +10,14 @@ const createVisibilityToggleHandler = ({
 }) =>
   async function visibilityToggleHandler(req, res) {
     try {
-      const adminSession = await requireAdmin(req, res);
-      if (!adminSession) return;
-
       if (req.method === "GET") {
         const value = await getVisibility();
         res.status(200).json({ [valueKey]: value });
         return;
       }
+
+      const adminSession = await requireAdmin(req, res);
+      if (!adminSession) return;
 
       if (req.method === "PUT") {
         if (typeof req.body?.[valueKey] !== "boolean") {

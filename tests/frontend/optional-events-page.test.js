@@ -72,8 +72,33 @@ test("Given optional events page, when checking source, then it uses visibility 
     "Optional events page should show import completion summary"
   );
   assert.ok(
+    page.includes("allowPublicWhenVisible: true"),
+    "Optional events page SSR should allow public access when optional events visibility is enabled"
+  );
+  assert.ok(
     page.includes("useCallback"),
     "Optional events page should memoize loadOptionalEvents for stable useEffect dependencies"
+  );
+  assert.ok(
+    page.includes("useRouter"),
+    "Optional events page should read router query so a Back button can return users to their previous page"
+  );
+  assert.ok(
+    page.includes("normalizeQueryValue(router.query.from)"),
+    "Optional events page should normalize the from query param"
+  );
+  assert.ok(
+    page.includes("resolveBackHref"),
+    "Optional events page should resolve a safe back href from query state"
+  );
+  assert.ok(
+    page.includes("Back") && page.includes("btn btn-outline-secondary"),
+    "Optional events page should render a Back button when from query param is present"
+  );
+  assert.ok(
+    page.includes("from || isAdmin") &&
+      page.includes('className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4"'),
+    "Optional events page should render a shared controls row so Back aligns with admin controls"
   );
   assert.match(
     page,
@@ -116,5 +141,17 @@ test("Given optional events API, when checking source, then it enforces optional
   assert.ok(
     api.includes("getOptionalEventsVisibleToParticipants"),
     "Optional events API should enforce participant visibility setting"
+  );
+  assert.ok(
+    api.includes("getAuthSessions"),
+    "Optional events API should read sessions without immediately rejecting anonymous users"
+  );
+  assert.ok(
+    api.includes("unauthorized(res)"),
+    "Optional events API should return unauthorized when no session exists and visibility is disabled"
+  );
+  assert.ok(
+    !api.includes("requireAnySession"),
+    "Optional events API should not force session auth before checking visibility for public results access"
   );
 });

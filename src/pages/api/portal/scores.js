@@ -1,8 +1,13 @@
 import { query } from "../../../utils/portal/db.js";
-import { methodNotAllowed, forbidden, internalServerError } from "../../../utils/portal/http.js";
+import {
+  methodNotAllowed,
+  unauthorized,
+  forbidden,
+  internalServerError,
+} from "../../../utils/portal/http.js";
 import { EVENT_TYPES } from "../../../utils/portal/event-constants.js";
 import { buildScoreStandings } from "../../../utils/portal/score-standings.js";
-import { requireAnySession } from "../../../utils/portal/auth-guards.js";
+import { getAuthSessions, validateAdminSession } from "../../../utils/portal/auth-guards.js";
 import { getScoresVisibleToParticipants } from "../../../utils/portal/portal-settings-db.js";
 
 const fetchTeamRows = async () => {
@@ -58,16 +63,17 @@ export default async function handler(req, res) {
       return;
     }
 
-    const auth = await requireAnySession(req, res);
-    if (!auth) {
-      return;
-    }
+    const { adminSession, participantSession } = getAuthSessions(req);
+    const validatedAdmin = adminSession ? await validateAdminSession(adminSession, res) : null;
+    if (adminSession && !validatedAdmin) return;
 
-    const isAdmin = Boolean(auth.adminSession);
+    const isAdmin = Boolean(validatedAdmin);
+    const isParticipant = Boolean(participantSession);
     if (!isAdmin) {
       const participantsCanViewScores = await getScoresVisibleToParticipants();
       if (!participantsCanViewScores) {
-        forbidden(res);
+        if (isParticipant) forbidden(res);
+        else unauthorized(res);
         return;
       }
     }

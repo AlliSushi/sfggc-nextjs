@@ -89,6 +89,7 @@ const requireSessionWithVisibilitySSR = async ({
   getParticipantVisibility,
   redirectTo = "/portal/",
   visibilityPropName = "participantsCanView",
+  allowPublicWhenVisible = false,
 }) => {
   const sessions = getAuthSessions(req);
   let { adminSession } = sessions;
@@ -98,7 +99,7 @@ const requireSessionWithVisibilitySSR = async ({
   }
   const participantVisibility = await getParticipantVisibility();
 
-  if (!adminSession && !participantSession) {
+  if (!adminSession && !participantSession && !(allowPublicWhenVisible && participantVisibility)) {
     return { redirect: { destination: redirectTo, permanent: false } };
   }
 

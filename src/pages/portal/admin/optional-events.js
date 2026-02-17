@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import RootLayout from "../../../components/layout/layout";
 import PortalShell from "../../../components/Portal/PortalShell/PortalShell";
 import AdminMenu from "../../../components/Portal/AdminMenu/AdminMenu";
@@ -8,6 +9,7 @@ import useAdminSession from "../../../hooks/portal/useAdminSession.js";
 import useVisibilityToggle from "../../../hooks/portal/useVisibilityToggle.js";
 import { portalFetch } from "../../../utils/portal/portal-fetch.js";
 import { DIVISION_LABELS, DIVISION_ORDER } from "../../../utils/portal/division-constants.js";
+import { normalizeQueryValue, resolveBackHref } from "../../../utils/portal/navigation.js";
 import { formatScore } from "../../../utils/portal/display-constants.js";
 import {
   createEmptyOptionalEventsStandings,
@@ -20,7 +22,10 @@ const TOP_LIST_LIMIT = 6;
 const TOP_DIVISION_LIMIT = 3;
 
 const OptionalEventsPage = ({ initialParticipantsCanViewOptionalEvents = false }) => {
+  const router = useRouter();
   const { isAdmin, adminRole } = useAdminSession();
+  const from = normalizeQueryValue(router.query.from);
+  const backHref = resolveBackHref(from, "/portal/");
   const [standings, setStandings] = useState(createEmptyOptionalEventsStandings);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -60,6 +65,7 @@ const OptionalEventsPage = ({ initialParticipantsCanViewOptionalEvents = false }
           next.optionalScratch[division] = Array.isArray(data?.optionalScratch?.[division])
             ? data.optionalScratch[division]
             : [];
+          next.optionalScratchHighGame[division] = data?.optionalScratchHighGame?.[division] ?? null;
         }
         setStandings(next);
       })
@@ -96,31 +102,44 @@ const OptionalEventsPage = ({ initialParticipantsCanViewOptionalEvents = false }
       title="Optional Events"
       subtitle="Standings for Best of 3 of 9, All Events Handicapped, and Optional Scratch."
     >
-      {isAdmin && (
-        <div className="d-flex justify-content-end mb-4 gap-2">
-          <button
-            type="button"
-            className="btn btn-outline-primary"
-            onClick={() => setShowImportModal(true)}
-          >
-            Import Optional Events
-          </button>
-          <button
-            type="button"
-            className={`btn ${participantsCanViewOptionalEvents ? "btn-success" : "btn-outline-secondary"}`}
-            onClick={() =>
-              updateOptionalEventsVisibility({
-                enabled: !participantsCanViewOptionalEvents,
-                canUpdate: isAdmin,
-                onError: setError,
-              })
-            }
-            aria-pressed={participantsCanViewOptionalEvents}
-            aria-label="Participants can view Optional Events"
-          >
-            {participantsCanViewOptionalEvents ? "On" : "Off"}
-          </button>
-          <AdminMenu adminRole={adminRole} />
+      {(from || isAdmin) && (
+        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+          <div>
+            {from && (
+              <Link className="btn btn-outline-secondary" href={backHref}>
+                Back
+              </Link>
+            )}
+          </div>
+          <div className="d-flex justify-content-end gap-2">
+            {isAdmin && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary"
+                  onClick={() => setShowImportModal(true)}
+                >
+                  Import Optional Events
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${participantsCanViewOptionalEvents ? "btn-success" : "btn-outline-secondary"}`}
+                  onClick={() =>
+                    updateOptionalEventsVisibility({
+                      enabled: !participantsCanViewOptionalEvents,
+                      canUpdate: isAdmin,
+                      onError: setError,
+                    })
+                  }
+                  aria-pressed={participantsCanViewOptionalEvents}
+                  aria-label="Participants can view Optional Events"
+                >
+                  {participantsCanViewOptionalEvents ? "On" : "Off"}
+                </button>
+                <AdminMenu adminRole={adminRole} />
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -220,6 +239,45 @@ const OptionalEventsPage = ({ initialParticipantsCanViewOptionalEvents = false }
 
           <section>
             <h3 className="h5 mb-3">Optional Scratch</h3>
+            {DIVISION_ORDER.some((d) => standings.optionalScratchHighGame?.[d]) && (
+              <>
+              <h4 className="h6 mb-2">Highest Game</h4>
+              <div className="table-responsive mb-4">
+                <table className="table table-striped align-middle">
+                  <thead>
+                    <tr>
+                      <th>Division</th>
+                      <th>Bowler</th>
+                      <th>High Game</th>
+                      <th>Event</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DIVISION_ORDER.flatMap((division) => {
+                      const highGame = standings.optionalScratchHighGame?.[division];
+                      if (!highGame) return [];
+                      return highGame.bowlers.map((b, i) => (
+                        <tr key={b.pid + b.eventType + b.gameNumber}>
+                          {i === 0 ? (
+                            <td rowSpan={highGame.bowlers.length}>{DIVISION_LABELS[division]}</td>
+                          ) : null}
+                          <td>
+                            <Link href={`/portal/participant/${b.pid}`}>{b.name}</Link>
+                          </td>
+                          <td className="fw-semibold">{formatScore(highGame.score)}</td>
+                          <td>
+                            {b.eventType.charAt(0).toUpperCase() + b.eventType.slice(1)}
+                            {" Game "}
+                            {b.gameNumber}
+                          </td>
+                        </tr>
+                      ));
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              </>
+            )}
             {DIVISION_ORDER.map((division) => {
               const rows = standings.optionalScratch[division] || [];
               if (!rows.length) return null;
@@ -289,6 +347,7 @@ export const getServerSideProps = async ({ req }) => {
     req,
     getParticipantVisibility: getOptionalEventsVisibleToParticipants,
     visibilityPropName: "initialParticipantsCanViewOptionalEvents",
+    allowPublicWhenVisible: true,
   });
 };
 

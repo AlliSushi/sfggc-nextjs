@@ -22,24 +22,36 @@ test(
       content.includes("visibilityPropName: \"initialParticipantsCanViewScores\""),
       "Scores page SSR should pass scores visibility prop name to shared helper"
     );
+    assert.ok(
+      content.includes("allowPublicWhenVisible: true"),
+      "Scores page SSR should allow public access when standings visibility is enabled"
+    );
   }
 );
 
 test(
-  "Given the scores API route, when checking authorization, then participants are allowed only when visibility is enabled",
+  "Given the scores API route, when checking authorization, then public access is allowed only when visibility is enabled",
   () => {
     const content = readFile("src/pages/api/portal/scores.js");
     assert.ok(
-      content.includes("requireAnySession"),
-      "Scores API must require a valid portal session"
+      content.includes("getAuthSessions"),
+      "Scores API should read sessions without immediately rejecting anonymous users"
     );
     assert.ok(
       content.includes("getScoresVisibleToParticipants"),
-      "Scores API must read visibility setting for participant access"
+      "Scores API must read visibility setting for participant and public access"
+    );
+    assert.ok(
+      content.includes("unauthorized(res)"),
+      "Scores API must return unauthorized when no session exists and visibility is disabled"
     );
     assert.ok(
       content.includes("forbidden(res)"),
       "Scores API must deny participant access when visibility is disabled"
+    );
+    assert.ok(
+      !content.includes("requireAnySession"),
+      "Scores API should not force session auth before checking visibility for public results access"
     );
   }
 );

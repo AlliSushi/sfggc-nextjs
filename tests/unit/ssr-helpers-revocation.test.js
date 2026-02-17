@@ -19,6 +19,18 @@ test("Given SSR helpers, when inspecting source, then requireSessionWithVisibili
   );
 });
 
+test("Given visibility SSR helper, when inspecting source, then it supports public access when explicitly enabled and visibility is on", () => {
+  const source = readSource();
+  assert.ok(
+    source.includes("allowPublicWhenVisible = false"),
+    "Visibility SSR helper should expose an opt-in public visibility option"
+  );
+  assert.ok(
+    source.includes("allowPublicWhenVisible && participantVisibility"),
+    "Visibility SSR helper should allow anonymous access only when visibility is enabled"
+  );
+});
+
 test("Given SSR admin guards, when inspecting source, then requireAdminSSR and requireSuperAdminSSR validate session revocation", () => {
   const source = readSource();
   assert.ok(
